@@ -12,7 +12,7 @@ const crypto    = require('crypto');
 const zlib      = require('zlib');
 
 const PORT    = Number(process.env.PORT   || 8000);
-const LT_HOST = process.env.LT_HOST || '192.168.68.38:54235';
+const LT_HOST = process.env.LT_HOST || '10.1.10.70:54235';
 const DEBUG   = process.env.DEBUG === '1';
 
 // ─── AES-256-CBC codec ────────────────────────────────────────────────────
@@ -84,7 +84,114 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get('/',           (_req, res) => res.json({ ok: true, status: state.connection.status }));
+app.get('/packets', (_req, res) => res.type('html').send(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>LiveTime Packet Monitor</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0b1020; color: #c8d4e0; font-family: 'Courier New', monospace; font-size: 13px; }
+  header { background: #0f1828; border-bottom: 2px solid #18b4d4; padding: 14px 20px;
+           display: flex; align-items: center; gap: 20px; position: sticky; top: 0; z-index: 10; }
+  h1 { font-size: 18px; font-weight: 700; color: #18b4d4; letter-spacing: .06em; font-family: sans-serif; }
+  .badge { background: #18b4d4; color: #0b1020; font-size: 11px; font-weight: 800;
+           padding: 2px 8px; border-radius: 3px; letter-spacing: .06em; }
+  .badge.off { background: #e03030; }
+  label { font-family: sans-serif; font-size: 12px; color: #8fa8bf; }
+  input[type=text] { background: #1a2538; border: 1px solid #2a3a50; color: #fff;
+                     padding: 4px 8px; border-radius: 3px; font-size: 12px; width: 200px; }
+  #log { padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .entry { background: #0f1828; border: 1px solid #1a2a40; border-left: 3px solid #18b4d4;
+           border-radius: 4px; padding: 8px 12px; transition: border-color .2s; }
+  .entry.flash { border-left-color: #f5c542; }
+  .entry-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .ptype { color: #18b4d4; font-weight: 700; font-size: 13px; }
+  .ptime { color: #4a6070; font-size: 11px; }
+  .pdata { color: #8fa8bf; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+  .pdata.expanded { color: #c8d4e0; }
+  .toggle { cursor: pointer; color: #18b4d4; font-size: 11px; margin-left: auto; user-select: none; }
+  .count { font-family: sans-serif; font-size: 12px; color: #4a6070; margin-left: auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ LiveTime Packet Monitor</h1>
+  <span class="badge off" id="status">CONNECTING</span>
+  <label>Filter: <input type="text" id="filter" placeholder="e.g. RaceEntry"></label>
+  <span class="count" id="count">0 packets</span>
+  <label><input type="checkbox" id="pause"> Pause</label>
+</header>
+<div id="log"></div>
+<script>
+const log     = document.getElementById('log');
+const filterEl= document.getElementById('filter');
+const pauseEl = document.getElementById('pause');
+const countEl = document.getElementById('count');
+const statusEl= document.getElementById('status');
+let total = 0;
+
+function ts(iso) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString('en-US', { hour12: false }) + '.' +
+         String(d.getMilliseconds()).padStart(3,'0');
+}
+
+function addEntry(pkt) {
+  if (pauseEl.checked) return;
+  const f = filterEl.value.trim().toLowerCase();
+  if (f && !pkt.type.toLowerCase().includes(f)) return;
+  total++;
+  countEl.textContent = total + ' packets';
+
+  const el = document.createElement('div');
+  el.className = 'entry flash';
+  setTimeout(() => el.classList.remove('flash'), 400);
+
+  const summary = JSON.stringify(pkt.data).slice(0, 120);
+  el.innerHTML = \`
+    <div class="entry-head">
+      <span class="ptype">\${pkt.type}</span>
+      <span class="ptime">\${ts(pkt.at)}</span>
+      <span class="toggle" onclick="toggleExpand(this)">▼ expand</span>
+    </div>
+    <div class="pdata">\${summary}\${pkt.data && JSON.stringify(pkt.data).length > 120 ? '…' : ''}</div>
+  \`;
+  el._full = JSON.stringify(pkt.data, null, 2);
+  log.prepend(el);
+  // Keep DOM lean
+  while (log.children.length > 150) log.removeChild(log.lastChild);
+}
+
+window.toggleExpand = function(btn) {
+  const entry = btn.closest('.entry');
+  const pdata = entry.querySelector('.pdata');
+  if (btn.textContent.startsWith('▼')) {
+    pdata.textContent = entry._full;
+    pdata.classList.add('expanded');
+    btn.textContent = '▲ collapse';
+  } else {
+    pdata.textContent = JSON.stringify(JSON.parse(entry._full)).slice(0, 120) + '…';
+    pdata.classList.remove('expanded');
+    btn.textContent = '▼ expand';
+  }
+};
+
+// Load recent packets on open
+fetch('/api/packets?n=50')
+  .then(r => r.json())
+  .then(pkts => pkts.reverse().forEach(addEntry));
+
+// Then stream live
+const es = new EventSource('/api/packets/stream');
+es.onopen = () => { statusEl.textContent = 'LIVE'; statusEl.classList.remove('off'); };
+es.onerror = () => { statusEl.textContent = 'DISCONNECTED'; statusEl.classList.add('off'); };
+es.onmessage = e => { try { addEntry(JSON.parse(e.data)); } catch(_) {} };
+</script>
+</body>
+</html>`));
+
+
 app.get('/api/health', (_req, res) => res.json({ ok: true, connection: state.connection }));
 app.get('/api/state',  (_req, res) => res.json(state.live));
 
@@ -126,7 +233,54 @@ app.get('/api/overlay/race', (_req, res) => {
   });
 });
 
-// ─── Dynamic race entry request ───────────────────────────────────────────
+// ─── Raw packet log ───────────────────────────────────────────────────────
+const packetLog = [];          // ring buffer, last 200 packets
+const packetSseClients = new Set();
+
+function logPacket(type, decoded) {
+  const entry = { at: new Date().toISOString(), type, data: decoded };
+  packetLog.unshift(entry);
+  if (packetLog.length > 200) packetLog.length = 200;
+  // Push to any watching SSE clients
+  const payload = `data: ${JSON.stringify(entry)}\n\n`;
+  for (const res of packetSseClients) {
+    try { res.write(payload); } catch (e) { packetSseClients.delete(res); }
+  }
+}
+
+// GET /api/packets         – last N decoded packets as JSON
+app.get('/api/packets', (req, res) => {
+  const n = Math.min(parseInt(req.query.n || 50), 200);
+  res.json(packetLog.slice(0, n));
+});
+
+// GET /api/packets/stream  – SSE stream of every decoded packet as it arrives
+app.get('/api/packets/stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+  res.write(`: connected\n\n`);
+  packetSseClients.add(res);
+  req.on('close', () => packetSseClients.delete(res));
+});
+
+
+// ─── Live race entry cache (handles IsDelta merging) ─────────────────────
+let liveRaceEntryCache = {};  // keyed by RaceEntryLID
+
+function mergeLiveRaceEntries(data) {
+  const entries = data.LiveRaceEntries || [];
+  if (!data.IsDelta) {
+    liveRaceEntryCache = {};
+    entries.forEach(e => { liveRaceEntryCache[e.RaceEntryLID] = e; });
+  } else {
+    entries.forEach(e => { liveRaceEntryCache[e.RaceEntryLID] = e; });
+  }
+  return Object.values(liveRaceEntryCache).sort((a, b) => a.Position - b.Position);
+}
+
 function requestRaceEntries(raceLID) {
   if (!wsRef || wsRef.readyState !== 1) return;
   wsRef.send(JSON.stringify({
@@ -168,6 +322,8 @@ function handlePacket(type, data) {
       state.live.race_state = data;
       if (data.RaceLID && data.RaceLID !== currentRaceLID) {
         currentRaceLID = data.RaceLID;
+        liveRaceEntryCache = {};  // reset for new race
+        state.live.live_race_entry = null;
         console.log(`Race changed → RaceLID=${currentRaceLID}, fetching entries`);
         setTimeout(() => requestRaceEntries(currentRaceLID), 200);
       }
@@ -201,10 +357,37 @@ function handlePacket(type, data) {
       pushSSE('state', state.live);
       break;
 
-    case 'LiveRaceEntryResponse':
-      state.live.live_race_entry = data;
+    case 'LiveRaceEntryResponse': {
+      const sorted = mergeLiveRaceEntries(data);
+      // Normalize to consistent field names the overlay expects
+      state.live.live_race_entry = {
+        IsDelta: data.IsDelta,
+        LiveRaceEntries: sorted.map(e => ({
+          RaceEntryLID:            e.RaceEntryLID,
+          Position:                e.Position,
+          Number:                  e.Number,
+          DriverName:              e.DriverName,
+          Laps:                    e.Laps,
+          LapTime:                 e.LapTime   ? parseFloat(e.LapTime)   : null,
+          FastestLap:              e.FastestLap? parseFloat(e.FastestLap): null,
+          Pace:                    e.Pace,
+          SortTimeBehindLeader:    e.SortTimeBehindLeader,
+          SortTimeBehindPositionAbove: e.SortTimeBehindPositionAbove,
+          IsFastestLapInRace:      e.IsFastestLapInRace,
+          IsDriverTransponderCheckedIn: e.IsDriverTransponderCheckedIn,
+          IsBroken:                e.IsBroken,
+          IsDisqualified:          e.IsDisqualified,
+          IsDidNotFinish:          e.IsDidNotFinish,
+          IsComplete:              e.IsComplete,
+          LiveEstimatedQualifyingPosition: e.LiveEstimatedQualifyingPosition,
+          RaceClassColor:          e.RaceClassColor,
+          RaceClassName:           e.RaceClassName,
+        })),
+      };
+      console.log(`LiveRaceEntry: ${sorted.length} drivers, IsDelta=${data.IsDelta}`);
       pushSSE('state', state.live);
       break;
+    }
   }
 }
 
@@ -266,6 +449,7 @@ async function connectSignalR() {
           const decoded = decodePacket(pkt.packetBytes);
           if (decoded) {
             log('RX', pkt.packetType, JSON.stringify(decoded).slice(0, 120));
+            logPacket(pkt.packetType, decoded);
             handlePacket(pkt.packetType, decoded);
           }
         }
@@ -294,8 +478,11 @@ async function connectSignalR() {
 // ─── Start ────────────────────────────────────────────────────────────────
 app.listen(PORT, async () => {
   console.log(`LiveTime bridge  http://127.0.0.1:${PORT}`);
-  console.log(`  /api/state   – full JSON state (poll)`);
-  console.log(`  /api/events  – SSE stream (instant push)`);
+  console.log(`  /api/state          – full JSON state (poll)`);
+  console.log(`  /api/events         – SSE stream (instant push)`);
+  console.log(`  /packets            – live packet monitor (browser)`);
+  console.log(`  /api/packets        – last 50 decoded packets (JSON)`);
+  console.log(`  /api/packets/stream – SSE stream of raw packets`);
   try {
     await connectSignalR();
   } catch (e) {

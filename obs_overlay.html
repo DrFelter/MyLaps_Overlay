@@ -1,410 +1,883 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8"/>
-<title>LiveTime OBS Overlay</title>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900&display=swap" rel="stylesheet">
-<style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-html, body {
-  width: 1920px; height: 1080px;
-  overflow: hidden; background: transparent;
-  font-family: 'Barlow Condensed', sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
-
-:root {
-  --navy:    #0b1020;
-  --card:    #0f1828;
-  --cyan:    #18b4d4;
-  --white:   #ffffff;
-  --silver:  #8fa8bf;
-  --div:     rgba(255,255,255,0.08);
-  --top-h:   80px;
-  --bot-h:   230px;
-  --row-h:   115px;
-}
-
-.overlay {
-  position: relative; width: 1920px; height: 1080px;
-  display: flex; flex-direction: column; justify-content: space-between;
-}
-
-/* ═══════════════════════════════════════
-   TOP BAR
-═══════════════════════════════════════ */
-.top-bar {
-  width: 100%; height: var(--top-h);
-  background: var(--navy);
-  display: flex; align-items: center; padding: 0 26px;
-  border-bottom: 2px solid rgba(24,180,212,0.5);
-  position: relative; flex-shrink: 0;
-}
-
-.top-left   { flex: 0 0 400px; display: flex; align-items: center; gap: 24px; }
-.top-center { flex: 1; display: flex; justify-content: center; align-items: center; }
-.top-right  { flex: 0 0 400px; display: flex; align-items: center; justify-content: flex-end; gap: 20px; }
-
-/* Practice mode hides the center pill and left race/TQ blocks,
-   shows a big PRACTICE label left-aligned instead */
-.top-bar.practice .top-left   { flex: 1; }
-.top-bar.practice .top-center { display: none; }
-.top-bar.practice .top-right  { flex: 0 0 auto; }
-.top-bar.practice .race-block { display: none; }
-.top-bar.practice .tq-block   { display: none; }
-
-.top-bar.practice .timer-block { display: none; }
-
-.practice-label {
-  display: none;
-  font-size: 52px; font-weight: 900; color: var(--white);
-  text-transform: uppercase; letter-spacing: .04em; line-height: 1;
-}
-.top-bar.practice .practice-label { display: block; }
-
-/* Race n/m block */
-.race-block { line-height: 1; }
-.top-lbl    { font-size: 12px; font-weight: 700; letter-spacing: .13em; color: var(--cyan); text-transform: uppercase; display: block; margin-bottom: 1px; }
-.race-n     { font-size: 52px; font-weight: 900; color: var(--white); letter-spacing: -.02em; line-height: 1; }
-
-/* TQ block */
-.tq-block  { line-height: 1.2; min-width: 0; }
-.tq-name   { font-size: 20px; font-weight: 800; color: var(--white); text-transform: uppercase; letter-spacing: .01em; white-space: nowrap; display: block; }
-.tq-detail { font-size: 15px; font-weight: 600; color: var(--silver); white-space: nowrap; display: block; }
-.rbadge {
-  display: inline-block; background: var(--cyan); color: var(--navy);
-  font-size: 11px; font-weight: 900; padding: 1px 5px; border-radius: 3px;
-  margin-left: 4px; vertical-align: middle; letter-spacing: .05em;
-}
-
-/* Center title pill */
-.title-pill {
-  display: flex; align-items: center; height: 52px;
-  border: 2px solid var(--cyan); border-radius: 5px; overflow: hidden;
-  box-shadow: 0 0 30px rgba(24,180,212,0.30);
-}
-.pill-tab {
-  padding: 0 18px; height: 100%; display: flex; align-items: center;
-  background: var(--cyan); color: var(--navy);
-  font-size: 16px; font-weight: 900; letter-spacing: .08em;
-  text-transform: uppercase; white-space: nowrap;
-}
-.pill-name {
-  padding: 0 24px; background: var(--card);
-  font-size: 27px; font-weight: 900; color: var(--white);
-  text-transform: uppercase; letter-spacing: .04em; white-space: nowrap;
-}
-
-/* Timer */
-.timer-block  { line-height: 1; text-align: right; }
-.timer-digits {
-  font-size: 52px; font-weight: 900; color: var(--white);
-  letter-spacing: -.01em; font-variant-numeric: tabular-nums; line-height: 1;
-}
-.colon { display: inline-block; animation: blink 1s step-start infinite; }
-.colon.paused { animation: none; }
-@keyframes blink { 50% { opacity: 0; } }
-
-/* Logo circle */
-.logo-circle {
-  width: 82px; height: 82px; border-radius: 50%;
-  border: 2px solid rgba(24,180,212,.45);
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-}
-.logo-txt {
-  font-size: 10px; font-weight: 900; color: var(--cyan);
-  text-align: center; text-transform: uppercase; letter-spacing: .04em; line-height: 1.3;
-}
-
-/* Flag strip */
-.flag-strip { position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: var(--cyan); transition: background .4s; }
-.flag-strip.yellow  { background: #f5c542; }
-.flag-strip.red     { background: #e03030; }
-.flag-strip.white   { background: #fff; }
-.flag-strip.checker { background: repeating-linear-gradient(90deg,#fff 0 10px,#111 10px 20px); }
-
-/* Caution banner */
-.caution-bar {
-  position: absolute; top: var(--top-h); left: 0; right: 0;
-  height: 0; overflow: hidden; background: #f5c542;
-  display: flex; align-items: center; justify-content: center;
-  transition: height .3s; z-index: 10;
-}
-.caution-bar.on  { height: 38px; }
-.caution-txt { font-size: 19px; font-weight: 900; letter-spacing: .22em; color: var(--navy); text-transform: uppercase; }
-
-/* ═══════════════════════════════════════
-   BOTTOM GRID — 5 cols × 2 rows
-═══════════════════════════════════════ */
-.bot-grid {
-  width: 100%;
-  height: var(--bot-h);
-  background: var(--navy);
-  border-top: 2px solid rgba(24,180,212,0.5);
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(2, var(--row-h));
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-/* ── Card ── */
-.dc {
-  display: flex;
-  align-items: center;
-  padding: 0 18px 0 14px;
-  gap: 14px;
-  border-right: 1px solid var(--div);
-  border-bottom: 1px solid var(--div);
-  min-width: 0;
-  position: relative;
-}
-.dc:nth-child(5n)  { border-right: none; }
-.dc:nth-child(n+6) { border-bottom: none; }
-
-/* Position number */
-.pos {
-  flex: 0 0 44px; height: 52px; border-radius: 4px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 28px; font-weight: 900; letter-spacing: -.02em;
-  background: var(--cyan); color: var(--navy); flex-shrink: 0;
-}
-.dc.p1 .pos { background: #f5c542; color: #000; }
-.dc.p2 .pos { background: #c0c8d0; color: #000; }
-.dc.p3 .pos { background: #cd7f32; color: #fff; }
-.dc.empty .pos { background: rgba(24,180,212,.16); color: rgba(255,255,255,.22); }
-
-/* Body */
-.dc-body {
-  flex: 1; min-width: 0;
-  display: flex; flex-direction: column;
-  justify-content: center; gap: 0;
-}
-
-/* ── PRE-RACE LAYOUT ── */
-/* Name: large, white, uppercase */
-.dc-name {
-  font-size: 22px; font-weight: 900; color: var(--white);
-  text-transform: uppercase; letter-spacing: .025em; line-height: 1.05;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-/* Status line: "CHECKED IN" — smaller, dimmer */
-.dc-status {
-  font-size: 14px; font-weight: 700; color: var(--silver);
-  letter-spacing: .08em; text-transform: uppercase;
-  display: flex; align-items: center; gap: 6px; margin-top: 5px;
-}
-.sdot {
-  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
-}
-.sdot.in  { background: #3ddc84; animation: pdot 1.6s ease-in-out infinite; }
-.sdot.not { background: rgba(255,255,255,0.25); }
-@keyframes pdot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.7)} }
-.dc-status.in  { color: #cde8d8; }
-.dc-status.not { color: rgba(255,255,255,0.35); }
-
-/* ── RACING LAYOUT ── */
-.dc-name-row {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
-}
-.dc-carnum {
-  flex-shrink: 0; font-size: 13px; font-weight: 700; color: var(--cyan);
-  background: rgba(24,180,212,.12); border: 1px solid rgba(24,180,212,.3);
-  border-radius: 3px; padding: 1px 6px; letter-spacing: .03em;
-}
-/* Gap bar */
-.gbar-wrap {
-  position: relative; height: 3px; background: rgba(255,255,255,.09);
-  border-radius: 2px; overflow: hidden; margin: 5px 0;
-}
-.gbar-fill {
-  position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px;
-  background: var(--cyan); transition: width .7s ease;
-}
-.dc.p1 .gbar-fill { background: #f5c542; }
-.dc.p2 .gbar-fill { background: #c0c8d0; }
-.dc.p3 .gbar-fill { background: #cd7f32; }
-
-/* Stats row */
-.stats-row {
-  display: flex; align-items: flex-start; gap: 0;
-}
-.sblk { display: flex; flex-direction: column; margin-right: 18px; }
-.slbl { font-size: 10px; font-weight: 700; letter-spacing: .1em; color: var(--silver); text-transform: uppercase; line-height: 1; }
-.sval { font-size: 16px; font-weight: 700; color: var(--white); font-variant-numeric: tabular-nums; line-height: 1.15; }
-.sval.ff  { color: var(--cyan); }   /* field fastest */
-.sval.pb  { color: #f5c542; }       /* just set PB */
-
-/* Flash on lap */
-@keyframes cardflash { 0%{background:rgba(24,180,212,.2)} 100%{background:transparent} }
-.dc.flash { animation: cardflash .75s ease-out forwards; }
-
-/* Connection badge */
-.conn-badge {
-  position: absolute; top: calc(var(--top-h) + 8px); right: 18px;
-  background: rgba(10,14,28,.9); border: 1px solid rgba(24,180,212,.4);
-  border-radius: 5px; padding: 5px 12px;
-  font-size: 12px; font-weight: 700; color: #f5a623;
-  letter-spacing: .08em; text-transform: uppercase;
-  display: none; z-index: 20;
-}
-.conn-badge.on { display: block; }
-</style>
-</head>
-<body>
-<div class="overlay">
-
-  <!-- TOP BAR -->
-  <div class="top-bar">
-
-    <div class="top-left">
-      <span class="practice-label">Practice</span>
-      <div class="race-block">
-        <span class="top-lbl">Race</span>
-        <span class="race-n" id="race-num">—</span>
-      </div>
-      <div class="tq-block">
-        <span class="top-lbl">Top Qualifier</span>
-        <span class="tq-name"   id="tq-name">—</span>
-        <span class="tq-detail" id="tq-detail">&nbsp;</span>
-      </div>
-    </div>
-
-    <div class="top-center">
-      <div class="title-pill">
-        <div class="pill-tab"  id="heat-badge">HEAT 1/1</div>
-        <div class="pill-name" id="class-name">LOADING…</div>
-        <div class="pill-tab"  id="round-badge">A MAIN</div>
-      </div>
-    </div>
-
-    <div class="top-right">
-      <div class="timer-block">
-        <span class="top-lbl" id="timer-lbl">TIME</span>
-        <span class="timer-digits">
-          <span id="t-min">8</span><span class="colon paused" id="colon">:</span><span id="t-sec">00</span>
-        </span>
-      </div>
-      <div class="logo-circle">
-        <span class="logo-txt" id="logo-txt">YOUR<br>TRACK</span>
-      </div>
-    </div>
-
-    <div class="flag-strip" id="flag-strip"></div>
-  </div>
-
-  <!-- CAUTION BANNER -->
-  <div class="caution-bar" id="caution-bar">
-    <span class="caution-txt">⚑ &nbsp; CAUTION &nbsp;·&nbsp; CAUTION &nbsp;·&nbsp; CAUTION &nbsp;·&nbsp; CAUTION &nbsp; ⚑</span>
-  </div>
-
-  <!-- 5 × 2 GRID -->
-  <div class="bot-grid" id="bot-grid"></div>
-
-</div>
-<div class="conn-badge" id="conn-badge">⚡ Connecting…</div>
-
-<script>
-// ── Config ────────────────────────────────────────────────────────────────
-const p    = new URLSearchParams(location.search);
-const API  = p.get('api')  || 'http://127.0.0.1:8000';
-const POLL = +(p.get('poll') || 400);
-const LOGO = p.get('logo') || '';
-if (LOGO) document.getElementById('logo-txt').innerHTML = LOGO.replace(/\s+/, '<br>');
-
-const SLOTS = 10;  // 5 × 2
-let prevLaps = {};
-let cd = { on: false, target: 0 };
-let raf = null;
-
-// ── Helpers ───────────────────────────────────────────────────────────────
-const parseHMS = s => {
-  if (!s) return 0;
-  const pts = s.split(':').map(Number);
-  return pts.length === 3 ? pts[0]*3600 + pts[1]*60 + pts[2]
-       : pts.length === 2 ? pts[0]*60 + pts[1]
-       : pts[0] || 0;
-};
-
-const fmtSec = sec => {
-  if (!sec || sec <= 0) return '—';
-  const m = Math.floor(sec / 60);
-  const s = (sec % 60).toFixed(3);
-  return m ? `${m}:${s.padStart(6,'0')}` : parseFloat(s).toFixed(3);
-};
-
-// ── Countdown timer ───────────────────────────────────────────────────────
-const $min = document.getElementById('t-min');
-const $sec = document.getElementById('t-sec');
-const $col = document.getElementById('colon');
-
-function renderSec(sec) {
-  const abs = Math.max(0, Math.round(sec));
-  $min.textContent = Math.floor(abs / 60);
-  $sec.textContent = String(abs % 60).padStart(2, '0');
-}
-function tickCd() {
-  if (!cd.on) return;
-  renderSec((cd.target - Date.now()) / 1000);
-  raf = requestAnimationFrame(tickCd);
-}
-function startCd(secs) {
-  if (raf) cancelAnimationFrame(raf);
-  cd = { on: true, target: Date.now() + secs * 1000 };
-  $col.classList.remove('paused');
-  tickCd();
-}
-function stopCd(secs) {
-  if (raf) cancelAnimationFrame(raf);
-  cd.on = false;
-  $col.classList.add('paused');
-  renderSec(secs);
-}
-
-// ── Flag ──────────────────────────────────────────────────────────────────
-const FLAG = { 1:'green', 2:'yellow', 3:'red', 4:'', 5:'white', 6:'checker', 7:'checker' };
-function setFlag(flagType, inCaution) {
-  const cls = FLAG[flagType] || '';
-  document.getElementById('flag-strip').className = 'flag-strip ' + cls;
-  document.getElementById('caution-bar').classList.toggle('on', inCaution || cls === 'yellow');
-}
-
-// ── Race grid ─────────────────────────────────────────────────────────────
-function buildRaceGrid(entries, raceLenSec, fieldFast) {
-  const grid = document.getElementById('bot-grid');
-  grid.style.display = 'grid';
-
-  for (let i = 0; i < SLOTS; i++) {
-    const e    = entries[i] || null;
-    const rank = e ? (e.OrderNumber || i + 1) : i + 1;
-
-    let card = grid.children[i];
-    if (!card) { card = document.createElement('div'); grid.appendChild(card); }
-
-    if (!e) {
-      card.className = 'dc empty';
-      card.innerHTML = `<div class="pos">${rank}</div>
-        <div class="dc-body"><div class="dc-name" style="color:rgba(255,255,255,.18)">—</div></div>`;
-      continue;
+  <meta charset="UTF-8" />
+  <title>LiveTime OBS Overlay</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900&display=swap"
+    rel="stylesheet">
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
 
-    const lid   = e.LID || i;
-    const laps  = e.CompletedLaps || 0;
-    const flash = prevLaps[lid] != null && laps > prevLaps[lid];
-    prevLaps[lid] = laps;
+    html,
+    body {
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: transparent;
+      font-family: 'Barlow Condensed', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
 
-    const posClass = rank === 1 ? 'p1' : rank === 2 ? 'p2' : rank === 3 ? 'p3' : '';
-    card.className = `dc ${posClass}${flash ? ' flash' : ''}`;
+    :root {
+      --navy: #0b1020;
+      --card: #0f1828;
+      --cyan: #18b4d4;
+      --white: #ffffff;
+      --silver: #8fa8bf;
+      --div: rgba(255, 255, 255, 0.08);
+      --top-h: 80px;
+      --bot-h: 230px;
+      --row-h: 115px;
+    }
 
-    const fullName = ((e.DriverName || '') + ' ' + (e.DriverLastName || '')).trim() || '—';
-    const carNum   = e.Number || '';
-    const hasRaced = laps > 0 || (e.FastestLap && e.FastestLap > 0);
+    .overlay {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
 
-    if (!hasRaced) {
-      // Pre-race: name + check-in status
-      const ci = e.StartMicrosecondsUTC != null && e.StartMicrosecondsUTC > 0;
-      card.innerHTML = `
+    /* ═══════════════════════════════════════
+   TOP BAR
+═══════════════════════════════════════ */
+    .top-bar {
+      width: 100%;
+      height: var(--top-h);
+      background: var(--navy);
+      display: flex;
+      align-items: center;
+      padding: 0 26px;
+      border-bottom: 2px solid rgba(24, 180, 212, 0.5);
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .top-left {
+      flex: 0 0 400px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .top-center {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .top-right {
+      flex: 0 0 400px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 20px;
+    }
+
+    /* Practice mode hides the center pill and left race/TQ blocks,
+   shows a big PRACTICE label left-aligned instead */
+    .top-bar.practice .top-left {
+      flex: 1;
+    }
+
+    .top-bar.practice .top-center {
+      display: none;
+    }
+
+    .top-bar.practice .top-right {
+      flex: 0 0 auto;
+    }
+
+    .top-bar.practice .race-block {
+      display: none;
+    }
+
+    .top-bar.practice .tq-block {
+      display: none;
+    }
+
+    .top-bar.practice .timer-block {
+      display: none;
+    }
+
+    .practice-label {
+      display: none;
+      font-size: 52px;
+      font-weight: 900;
+      color: var(--white);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      line-height: 1;
+    }
+
+    .top-bar.practice .practice-label {
+      display: block;
+    }
+
+    /* Race n/m block */
+    .race-block {
+      line-height: 1;
+    }
+
+    .top-lbl {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .13em;
+      color: var(--cyan);
+      text-transform: uppercase;
+      display: block;
+      margin-bottom: 1px;
+    }
+
+    .race-n {
+      font-size: 52px;
+      font-weight: 900;
+      color: var(--white);
+      letter-spacing: -.02em;
+      line-height: 1;
+    }
+
+    /* TQ block */
+    .tq-block {
+      line-height: 1.2;
+      min-width: 0;
+    }
+
+    .tq-name {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--white);
+      text-transform: uppercase;
+      letter-spacing: .01em;
+      white-space: nowrap;
+      display: block;
+    }
+
+    .tq-detail {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--silver);
+      white-space: nowrap;
+      display: block;
+    }
+
+    .rbadge {
+      display: inline-block;
+      background: var(--cyan);
+      color: var(--navy);
+      font-size: 11px;
+      font-weight: 900;
+      padding: 1px 5px;
+      border-radius: 3px;
+      margin-left: 4px;
+      vertical-align: middle;
+      letter-spacing: .05em;
+    }
+
+    /* Center title pill */
+    .title-pill {
+      display: flex;
+      align-items: center;
+      height: 52px;
+      border: 2px solid var(--cyan);
+      border-radius: 5px;
+      overflow: hidden;
+      box-shadow: 0 0 30px rgba(24, 180, 212, 0.30);
+    }
+
+    .pill-tab {
+      padding: 0 18px;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      background: var(--cyan);
+      color: var(--navy);
+      font-size: 16px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .pill-name {
+      padding: 0 24px;
+      background: var(--card);
+      font-size: 27px;
+      font-weight: 900;
+      color: var(--white);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      white-space: nowrap;
+    }
+
+    /* Timer */
+    .timer-block {
+      line-height: 1;
+      text-align: right;
+    }
+
+    .timer-digits {
+      font-size: 52px;
+      font-weight: 900;
+      color: var(--white);
+      letter-spacing: -.01em;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+
+    .colon {
+      display: inline-block;
+      animation: blink 1s step-start infinite;
+    }
+
+    .colon.paused {
+      animation: none;
+    }
+
+    @keyframes blink {
+      50% {
+        opacity: 0;
+      }
+    }
+
+    /* Logo image */
+    .logo-img {
+      height: calc(var(--top-h) + 60px);
+      /*fills header height with 5px padding top/bottom */
+      width: auto;
+      object-fit: contain;
+      flex-shrink: 0;
+      display: block;
+    }
+
+    /* Flag strip */
+    .flag-strip {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.15);
+      transition: background .4s;
+    }
+
+    .flag-strip.purple {
+      background: #a855f7;
+    }
+
+    .flag-strip.green {
+      background: #3ddc84;
+    }
+
+    .flag-strip.yellow {
+      background: #f5c542;
+    }
+
+    .flag-strip.red {
+      background: #e03030;
+    }
+
+    .flag-strip.white {
+      background: #ffffff;
+    }
+
+    .flag-strip.checker {
+      background: repeating-linear-gradient(90deg, #fff 0 10px, #111 10px 20px);
+    }
+
+    .flag-strip.finish {
+      background: repeating-linear-gradient(90deg, #fff 0 10px, #111 10px 20px);
+    }
+
+    /* Race status banner — sits below top bar, above track */
+    .status-bar {
+      position: absolute;
+      top: var(--top-h);
+      left: 0;
+      right: 0;
+      height: 0;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: height .25s, background .4s;
+      z-index: 9;
+    }
+
+    .status-bar.on {
+      height: 38px;
+    }
+
+    .status-txt {
+      font-size: 17px;
+      font-weight: 900;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+    }
+
+    /* State-specific colours */
+    .status-bar.purple {
+      background: rgba(168, 85, 247, 0.85);
+    }
+
+    .status-bar.purple .status-txt {
+      color: #fff;
+    }
+
+    .status-bar.staged {
+      background: rgba(24, 180, 212, 0.85);
+    }
+
+    .status-bar.staged .status-txt {
+      color: #0b1020;
+    }
+
+    .status-bar.yellow {
+      background: #f5c542;
+    }
+
+    .status-bar.yellow .status-txt {
+      color: #0b1020;
+    }
+
+    .status-bar.red {
+      background: #e03030;
+    }
+
+    .status-bar.red .status-txt {
+      color: #fff;
+    }
+
+    .status-bar.finish {
+      background: rgba(255, 255, 255, 0.92);
+    }
+
+    .status-bar.finish .status-txt {
+      color: #0b1020;
+    }
+
+    /* Caution banner — kept for backward compat but now handled by status-bar */
+    .caution-bar {
+      display: none;
+    }
+
+    .caution-txt {
+      display: none;
+    }
+
+    /* ═══════════════════════════════════════
+   BOTTOM GRID — 5 cols × 2 rows
+═══════════════════════════════════════ */
+    .bot-grid {
+      width: 100%;
+      height: var(--bot-h);
+      background: var(--navy);
+      border-top: 2px solid rgba(24, 180, 212, 0.5);
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      grid-template-rows: repeat(2, var(--row-h));
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    /* ── Card ── */
+    .dc {
+      display: flex;
+      align-items: center;
+      padding: 0 18px 0 14px;
+      gap: 14px;
+      border-right: 1px solid var(--div);
+      border-bottom: 1px solid var(--div);
+      min-width: 0;
+      position: relative;
+    }
+
+    .dc:nth-child(5n) {
+      border-right: none;
+    }
+
+    .dc:nth-child(n+6) {
+      border-bottom: none;
+    }
+
+    /* Position number */
+    .pos {
+      flex: 0 0 44px;
+      height: 52px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 900;
+      letter-spacing: -.02em;
+      background: var(--cyan);
+      color: var(--navy);
+      flex-shrink: 0;
+    }
+
+    .dc.p1 .pos {
+      background: #f5c542;
+      color: #000;
+    }
+
+    .dc.p2 .pos {
+      background: #c0c8d0;
+      color: #000;
+    }
+
+    .dc.p3 .pos {
+      background: #cd7f32;
+      color: #fff;
+    }
+
+    .dc.empty .pos {
+      background: rgba(24, 180, 212, .16);
+      color: rgba(255, 255, 255, .22);
+    }
+
+    /* Body */
+    .dc-body {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 0;
+    }
+
+    /* ── PRE-RACE LAYOUT ── */
+    /* Name: large, white, uppercase */
+    .dc-name {
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--white);
+      text-transform: uppercase;
+      letter-spacing: .025em;
+      line-height: 1.05;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Status line: "CHECKED IN" — smaller, dimmer */
+    .dc-status {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--silver);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 5px;
+    }
+
+    .sdot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .sdot.in {
+      background: #3ddc84;
+      animation: pdot 1.6s ease-in-out infinite;
+    }
+
+    .sdot.not {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    @keyframes pdot {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1)
+      }
+
+      50% {
+        opacity: .5;
+        transform: scale(.7)
+      }
+    }
+
+    .dc-status.in {
+      color: #cde8d8;
+    }
+
+    .dc-status.not {
+      color: rgba(255, 255, 255, 0.35);
+    }
+
+    /* ── RACING LAYOUT ── */
+    .dc-name-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .dc-carnum {
+      flex-shrink: 0;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--cyan);
+      background: rgba(24, 180, 212, .12);
+      border: 1px solid rgba(24, 180, 212, .3);
+      border-radius: 3px;
+      padding: 1px 6px;
+      letter-spacing: .03em;
+    }
+
+    /* Gap bar */
+    .gbar-wrap {
+      position: relative;
+      height: 3px;
+      background: rgba(255, 255, 255, .09);
+      border-radius: 2px;
+      overflow: hidden;
+      margin: 5px 0;
+    }
+
+    .gbar-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      border-radius: 2px;
+      background: var(--cyan);
+      transition: width .7s ease;
+    }
+
+    .dc.p1 .gbar-fill {
+      background: #f5c542;
+    }
+
+    .dc.p2 .gbar-fill {
+      background: #c0c8d0;
+    }
+
+    .dc.p3 .gbar-fill {
+      background: #cd7f32;
+    }
+
+    /* Stats row */
+    .stats-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
+    }
+
+    .sblk {
+      display: flex;
+      flex-direction: column;
+      margin-right: 18px;
+    }
+
+    .slbl {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      color: var(--silver);
+      text-transform: uppercase;
+      line-height: 1;
+    }
+
+    .sval {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--white);
+      font-variant-numeric: tabular-nums;
+      line-height: 1.15;
+    }
+
+    .sval.ff {
+      color: var(--cyan);
+    }
+
+    /* field fastest */
+    .sval.pb {
+      color: #f5c542;
+    }
+
+    /* just set PB */
+
+    /* Flash on lap */
+    @keyframes cardflash {
+      0% {
+        background: rgba(24, 180, 212, .2)
+      }
+
+      100% {
+        background: transparent
+      }
+    }
+
+    .dc.flash {
+      animation: cardflash .75s ease-out forwards;
+    }
+
+    /* Connection badge */
+    .conn-badge {
+      position: absolute;
+      top: calc(var(--top-h) + 8px);
+      right: 18px;
+      background: rgba(10, 14, 28, .9);
+      border: 1px solid rgba(24, 180, 212, .4);
+      border-radius: 5px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #f5a623;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      display: none;
+      z-index: 20;
+    }
+
+    .conn-badge.on {
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="overlay">
+
+    <!-- TOP BAR -->
+    <div class="top-bar">
+
+      <div class="top-left">
+        <span class="practice-label">Practice</span>
+        <div class="race-block">
+          <span class="top-lbl">Race</span>
+          <span class="race-n" id="race-num">—</span>
+        </div>
+        <div class="tq-block">
+          <span class="top-lbl">Top Qualifier</span>
+          <span class="tq-name" id="tq-name">—</span>
+          <span class="tq-detail" id="tq-detail">&nbsp;</span>
+        </div>
+      </div>
+
+      <div class="top-center">
+        <div class="title-pill">
+          <div class="pill-tab" id="heat-badge">HEAT 1/1</div>
+          <div class="pill-name" id="class-name">LOADING…</div>
+          <div class="pill-tab" id="round-badge">A MAIN</div>
+        </div>
+      </div>
+
+      <div class="top-right">
+        <div class="timer-block">
+          <span class="top-lbl" id="timer-lbl">TIME</span>
+          <span class="timer-digits">
+            <span id="t-min">8</span><span class="colon paused" id="colon">:</span><span id="t-sec">00</span>
+          </span>
+        </div>
+        <img src="GRRC_Logo_Transparent.png" alt="GRRC" class="logo-img">
+      </div>
+
+      <div class="flag-strip" id="flag-strip"></div>
+    </div>
+
+    <!-- RACE STATUS BANNER -->
+    <div class="status-bar" id="status-bar">
+      <span class="status-txt" id="status-txt"></span>
+    </div>
+
+    <!-- 5 × 2 GRID -->
+    <div class="bot-grid" id="bot-grid"></div>
+
+  </div>
+  <div class="conn-badge" id="conn-badge">⚡ Connecting…</div>
+
+  <script>
+    // ── Config ────────────────────────────────────────────────────────────────
+    const p = new URLSearchParams(location.search);
+    const API = p.get('api') || 'http://127.0.0.1:8000';
+    const POLL = +(p.get('poll') || 400);
+
+    const SLOTS = 10;  // 5 × 2
+    let prevLaps = {};
+    let cd = { on: false, target: 0 };
+    let raf = null;
+    let lastRaceDisplayState = 0;  // updated in applyState, used in applyTimer
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    const parseHMS = s => {
+      if (!s) return 0;
+      const pts = s.split(':').map(Number);
+      return pts.length === 3 ? pts[0] * 3600 + pts[1] * 60 + pts[2]
+        : pts.length === 2 ? pts[0] * 60 + pts[1]
+          : pts[0] || 0;
+    };
+
+    const fmtSec = sec => {
+      if (!sec || sec <= 0) return '—';
+      const m = Math.floor(sec / 60);
+      const s = (sec % 60).toFixed(3);
+      return m ? `${m}:${s.padStart(6, '0')}` : parseFloat(s).toFixed(3);
+    };
+
+    // ── Countdown timer ───────────────────────────────────────────────────────
+    const $min = document.getElementById('t-min');
+    const $sec = document.getElementById('t-sec');
+    const $col = document.getElementById('colon');
+
+    function renderSec(sec) {
+      const abs = Math.max(0, Math.round(sec));
+      $min.textContent = Math.floor(abs / 60);
+      $sec.textContent = String(abs % 60).padStart(2, '0');
+    }
+    function tickCd() {
+      if (!cd.on) return;
+      renderSec((cd.target - Date.now()) / 1000);
+      raf = requestAnimationFrame(tickCd);
+    }
+    function startCd(secs) {
+      if (raf) cancelAnimationFrame(raf);
+      cd = { on: true, target: Date.now() + secs * 1000 };
+      $col.classList.remove('paused');
+      tickCd();
+    }
+    function stopCd(secs) {
+      if (raf) cancelAnimationFrame(raf);
+      cd.on = false;
+      $col.classList.add('paused');
+      renderSec(secs);
+    }
+
+    // ── Race state display ────────────────────────────────────────────────────
+    // RaceDisplayState: 0=idle, 1=pre-race/staging, 2=all checked in/ready, 3=racing, 4=finished
+    // FlagType:         1=green, 2=yellow, 3=red, 4=none/purple, 5=white, 6=checker
+
+    function setRaceState(raceDisplayState, flagType, inCaution) {
+      const strip = document.getElementById('flag-strip');
+      const statusBar = document.getElementById('status-bar');
+      const statusTxt = document.getElementById('status-txt');
+
+      // Determine the state key from display state + flag type
+      let stripClass = '';
+      let barClass = '';
+      let bannerText = '';
+
+      if (inCaution || flagType === 2) {
+        // Caution / yellow flag — overrides everything during a race
+        stripClass = 'yellow';
+        barClass = 'yellow';
+        bannerText = '⚑  CAUTION  ·  CAUTION  ·  CAUTION  ·  CAUTION  ⚑';
+
+      } else if (flagType === 3) {
+        // Red flag — race stopped
+        stripClass = 'red';
+        barClass = 'red';
+        bannerText = '■  RED FLAG  —  RACE STOPPED  ■';
+
+      } else if (flagType === 6 || raceDisplayState === 4) {
+        // Checkered / finished
+        stripClass = 'finish';
+        barClass = 'finish';
+        bannerText = '⛿  CHECKERED FLAG  —  RACE COMPLETE  ⛿';
+
+      } else if (flagType === 5) {
+        // White flag — last lap
+        stripClass = 'white';
+        barClass = '';   // no banner, just the strip
+        bannerText = '';
+
+      } else if (flagType === 1 || raceDisplayState === 3) {
+        // Green flag / racing
+        stripClass = 'green';
+        barClass = '';   // no banner during normal racing
+        bannerText = '';
+
+      } else if (raceDisplayState === 2) {
+        // All checked in, about to start
+        stripClass = 'purple';
+        barClass = 'staged';
+        bannerText = '✓  ALL DRIVERS STAGED  —  READY TO RACE';
+
+      } else if (raceDisplayState === 1) {
+        // Pre-race, waiting for check-ins (purple flag)
+        stripClass = 'purple';
+        barClass = 'purple';
+        bannerText = 'WAITING FOR DRIVERS TO CHECK IN';
+
+      } else {
+        // Idle / unknown
+        stripClass = '';
+        barClass = '';
+        bannerText = '';
+      }
+
+      strip.className = 'flag-strip ' + stripClass;
+
+      if (bannerText) {
+        statusBar.className = 'status-bar on ' + barClass;
+        statusTxt.textContent = bannerText;
+      } else {
+        statusBar.className = 'status-bar';
+        statusTxt.textContent = '';
+      }
+    }
+
+    // ── Race grid ─────────────────────────────────────────────────────────────
+    // isLive=true: LiveRaceEntryResponse fields (Position, Laps, LapTime, IsFastestLapInRace, Pace)
+    // isLive=false: RaceEntryByRaceResponse fields (OrderNumber, CompletedLaps, LastLap, FastestLap)
+    function buildRaceGrid(entries, raceLenSec, fieldFast, isLive) {
+      const grid = document.getElementById('bot-grid');
+      grid.style.display = 'grid';
+
+      for (let i = 0; i < SLOTS; i++) {
+        const e = entries[i] || null;
+        const rank = e ? (e.Position || e.OrderNumber || i + 1) : i + 1;
+
+        let card = grid.children[i];
+        if (!card) { card = document.createElement('div'); grid.appendChild(card); }
+
+        if (!e) {
+          card.className = 'dc empty';
+          card.innerHTML = `<div class="pos">${rank}</div>
+        <div class="dc-body"><div class="dc-name" style="color:rgba(255,255,255,.18)">—</div></div>`;
+          continue;
+        }
+
+        // Normalize across both formats
+        const lid = e.RaceEntryLID || e.LID || i;
+        const laps = isLive ? (e.Laps || 0) : (e.CompletedLaps || 0);
+        const lastLap = isLive ? e.LapTime : e.LastLap;   // both floats after bridge normalize
+        const fastLap = e.FastestLap;
+        const carNum = e.Number || '';
+        const fullName = isLive
+          ? (e.DriverName || '—')
+          : ((e.DriverName || '') + ' ' + (e.DriverLastName || '')).trim() || '—';
+
+        const flash = prevLaps[lid] != null && laps > prevLaps[lid];
+        prevLaps[lid] = laps;
+
+        const posClass = rank === 1 ? 'p1' : rank === 2 ? 'p2' : rank === 3 ? 'p3' : '';
+        card.className = `dc ${posClass}${flash ? ' flash' : ''}`;
+
+        const hasRaced = laps > 0 || (fastLap && fastLap > 0);
+
+        if (!hasRaced) {
+          const ci = isLive
+            ? !!e.IsDriverTransponderCheckedIn
+            : (e.StartMicrosecondsUTC != null && e.StartMicrosecondsUTC > 0);
+          card.innerHTML = `
         <div class="pos">${rank}</div>
         <div class="dc-body">
           <div class="dc-name">${fullName}</div>
@@ -413,19 +886,34 @@ function buildRaceGrid(entries, raceLenSec, fieldFast) {
             ${ci ? 'CHECKED IN' : 'NOT CHECKED IN'}
           </div>
         </div>`;
-    } else {
-      // Racing: name + gap bar + stats
-      const isFastField = e.FastestLap && fieldFast && Math.abs(e.FastestLap - fieldFast) < 0.001;
-      const lastIsPB    = e.LastLap && e.FastestLap && Math.abs(e.LastLap - e.FastestLap) < 0.001;
-      let barPct = 100;
-      if (rank > 1 && entries[0]?.FastestLap && e.FastestLap)
-        barPct = Math.max(6, Math.min(100, (entries[0].FastestLap / e.FastestLap) * 100));
-      let paceStr = '—';
-      if (laps > 0) {
-        const totalSec = e.CompletedTime || (e.AverageLap ? e.AverageLap * laps : 0);
-        if (totalSec > 0) paceStr = `${laps}/${fmtSec(totalSec)}`;
-      }
-      card.innerHTML = `
+        } else {
+          // IsFastestLapInRace is authoritative from server when live
+          const isFastField = isLive
+            ? !!e.IsFastestLapInRace
+            : (fastLap && fieldFast && Math.abs(fastLap - fieldFast) < 0.001);
+          const lastIsPB = lastLap && fastLap && Math.abs(lastLap - fastLap) < 0.001;
+
+          // Gap bar — use SortTimeBehindLeader when available (tighter = more accurate)
+          let barPct = 100;
+          if (rank > 1) {
+            if (isLive && e.SortTimeBehindLeader != null) {
+              // 0s gap = 100%, 2s = ~10% (RC pan car races are within 1-2s)
+              barPct = Math.max(6, Math.min(100, 100 - (e.SortTimeBehindLeader / 2) * 90));
+            } else if (entries[0]?.FastestLap && fastLap) {
+              barPct = Math.max(6, Math.min(100, (entries[0].FastestLap / fastLap) * 100));
+            }
+          }
+
+          // Pace: server provides pre-formatted string in live mode
+          const paceStr = (isLive && e.Pace) ? e.Pace : (() => {
+            if (laps > 0) {
+              const totalSec = e.CompletedTime || (e.AverageLap ? e.AverageLap * laps : 0);
+              return totalSec > 0 ? `${laps}/${fmtSec(totalSec)}` : `${laps} laps`;
+            }
+            return '—';
+          })();
+
+          card.innerHTML = `
         <div class="pos">${rank}</div>
         <div class="dc-body">
           <div class="dc-name-row">
@@ -434,68 +922,67 @@ function buildRaceGrid(entries, raceLenSec, fieldFast) {
           </div>
           <div class="gbar-wrap"><div class="gbar-fill" style="width:${barPct.toFixed(1)}%"></div></div>
           <div class="stats-row">
-            <div class="sblk"><span class="slbl">Last</span><span class="sval${lastIsPB?' pb':''}">${fmtSec(e.LastLap)}</span></div>
-            <div class="sblk"><span class="slbl">Fast</span><span class="sval${isFastField?' ff':''}">${fmtSec(e.FastestLap)}</span></div>
+            <div class="sblk"><span class="slbl">Last</span><span class="sval${lastIsPB ? ' pb' : ''}">${fmtSec(lastLap)}</span></div>
+            <div class="sblk"><span class="slbl">Fast</span><span class="sval${isFastField ? ' ff' : ''}">${fmtSec(fastLap)}</span></div>
             <div class="sblk"><span class="slbl">Pace</span><span class="sval">${paceStr}</span></div>
           </div>
         </div>`;
+        }
+      }
+
+      while (grid.children.length > SLOTS) grid.removeChild(grid.lastChild);
     }
-  }
 
-  // Remove any extra cards beyond SLOTS
-  while (grid.children.length > SLOTS) grid.removeChild(grid.lastChild);
-}
+    // ── Practice grid ─────────────────────────────────────────────────────────
+    // LivePracticeSessions is an array of session objects sorted by position.
+    // Fields we use: DriverName, DriverLastName, Number, CompletedLaps,
+    //                FastestLap, LastLap, AverageLap, CompletedTime
+    function buildPracticeGrid(sessions, fieldFast) {
+      const grid = document.getElementById('bot-grid');
 
-// ── Practice grid ─────────────────────────────────────────────────────────
-// LivePracticeSessions is an array of session objects sorted by position.
-// Fields we use: DriverName, DriverLastName, Number, CompletedLaps,
-//                FastestLap, LastLap, AverageLap, CompletedTime
-function buildPracticeGrid(sessions, fieldFast) {
-  const grid = document.getElementById('bot-grid');
+      // Hide grid entirely when no one has lapped yet
+      if (!sessions || sessions.length === 0) {
+        grid.style.display = 'none';
+        return;
+      }
+      grid.style.display = 'grid';
 
-  // Hide grid entirely when no one has lapped yet
-  if (!sessions || sessions.length === 0) {
-    grid.style.display = 'none';
-    return;
-  }
-  grid.style.display = 'grid';
+      const count = Math.min(sessions.length, SLOTS);
 
-  const count = Math.min(sessions.length, SLOTS);
+      for (let i = 0; i < SLOTS; i++) {
+        const s = sessions[i] || null;
+        const rank = i + 1;
 
-  for (let i = 0; i < SLOTS; i++) {
-    const s    = sessions[i] || null;
-    const rank = i + 1;
+        let card = grid.children[i];
+        if (!card) { card = document.createElement('div'); grid.appendChild(card); }
 
-    let card = grid.children[i];
-    if (!card) { card = document.createElement('div'); grid.appendChild(card); }
-
-    if (!s) {
-      // Hide unused slots cleanly — practice grid only shows active drivers
-      card.className = 'dc empty';
-      card.innerHTML = `<div class="pos">${rank}</div>
+        if (!s) {
+          // Hide unused slots cleanly — practice grid only shows active drivers
+          card.className = 'dc empty';
+          card.innerHTML = `<div class="pos">${rank}</div>
         <div class="dc-body"><div class="dc-name" style="color:rgba(255,255,255,.18)">—</div></div>`;
-      continue;
-    }
+          continue;
+        }
 
-    const lid   = s.LID || s.DriverLID || i;
-    const laps  = s.CompletedLaps || 0;
-    const flash = prevLaps[lid] != null && laps > prevLaps[lid];
-    prevLaps[lid] = laps;
+        const lid = s.LID || s.DriverLID || i;
+        const laps = s.CompletedLaps || 0;
+        const flash = prevLaps[lid] != null && laps > prevLaps[lid];
+        prevLaps[lid] = laps;
 
-    const posClass = rank === 1 ? 'p1' : rank === 2 ? 'p2' : rank === 3 ? 'p3' : '';
-    card.className = `dc ${posClass}${flash ? ' flash' : ''}`;
+        const posClass = rank === 1 ? 'p1' : rank === 2 ? 'p2' : rank === 3 ? 'p3' : '';
+        card.className = `dc ${posClass}${flash ? ' flash' : ''}`;
 
-    const fullName = ((s.DriverName || '') + ' ' + (s.DriverLastName || '')).trim() || '—';
-    const carNum   = s.Number || '';
+        const fullName = ((s.DriverName || '') + ' ' + (s.DriverLastName || '')).trim() || '—';
+        const carNum = s.Number || '';
 
-    const isFastField = s.FastestLap && fieldFast && Math.abs(s.FastestLap - fieldFast) < 0.001;
-    const lastIsPB    = s.LastLap && s.FastestLap && Math.abs(s.LastLap - s.FastestLap) < 0.001;
+        const isFastField = s.FastestLap && fieldFast && Math.abs(s.FastestLap - fieldFast) < 0.001;
+        const lastIsPB = s.LastLap && s.FastestLap && Math.abs(s.LastLap - s.FastestLap) < 0.001;
 
-    let barPct = 100;
-    if (rank > 1 && sessions[0]?.FastestLap && s.FastestLap)
-      barPct = Math.max(6, Math.min(100, (sessions[0].FastestLap / s.FastestLap) * 100));
+        let barPct = 100;
+        if (rank > 1 && sessions[0]?.FastestLap && s.FastestLap)
+          barPct = Math.max(6, Math.min(100, (sessions[0].FastestLap / s.FastestLap) * 100));
 
-    card.innerHTML = `
+        card.innerHTML = `
       <div class="pos">${rank}</div>
       <div class="dc-body">
         <div class="dc-name-row">
@@ -505,239 +992,264 @@ function buildPracticeGrid(sessions, fieldFast) {
         <div class="gbar-wrap"><div class="gbar-fill" style="width:${barPct.toFixed(1)}%"></div></div>
         <div class="stats-row">
           <div class="sblk"><span class="slbl">Laps</span><span class="sval">${laps || '—'}</span></div>
-          <div class="sblk"><span class="slbl">Last</span><span class="sval${lastIsPB?' pb':''}">${fmtSec(s.LastLap)}</span></div>
-          <div class="sblk"><span class="slbl">Fast</span><span class="sval${isFastField?' ff':''}">${fmtSec(s.FastestLap)}</span></div>
+          <div class="sblk"><span class="slbl">Last</span><span class="sval${lastIsPB ? ' pb' : ''}">${fmtSec(s.LastLap)}</span></div>
+          <div class="sblk"><span class="slbl">Fast</span><span class="sval${isFastField ? ' ff' : ''}">${fmtSec(s.FastestLap)}</span></div>
         </div>
       </div>`;
-  }
-
-  while (grid.children.length > SLOTS) grid.removeChild(grid.lastChild);
-}
-
-// ── Apply timer only (for SSE time events) ────────────────────────────────
-function applyTimer(timeData, isPractice) {
-  if (isPractice) {
-    const remSec = parseHMS(timeData.SecondsRemaining);
-    const running = !!timeData.IsTimerRunning;
-    document.getElementById('timer-lbl').textContent = running ? 'TIME LEFT' : 'TIME';
-    if (running && remSec > 0) {
-      const curRem = cd.on ? (cd.target - Date.now()) / 1000 : -9999;
-      if (Math.abs(curRem - remSec) > 2) startCd(remSec);
-    } else {
-      stopCd(remSec);
-    }
-  } else {
-    const raceLenSec = parseHMS(timeData.RaceLength || '8:00');
-    const elapsedSec = parseHMS(timeData.TimeElapsed);
-    const remSec     = Math.max(0, raceLenSec - elapsedSec);
-    const running    = !!timeData.IsTimerRunning;
-    document.getElementById('timer-lbl').textContent = running ? 'TIME LEFT' : 'TIME';
-    if (running && remSec > 0) {
-      const curRem = cd.on ? (cd.target - Date.now()) / 1000 : -9999;
-      if (Math.abs(curRem - remSec) > 2) startCd(remSec);
-    } else {
-      stopCd(remSec);
-    }
-    setFlag(timeData.FlagType || 4, !!timeData.IsInCaution);
-  }
-}
-
-// ── Main update ────────────────────────────────────────────────────────────
-function applyState(data) {
-  const es = data.event_state      || {};
-  const rs = data.race_state       || {};
-  const rt = data.race_time        || {};
-  const re = data.race_entry       || {};
-  const pt = data.practice_time    || {};
-  const ps = data.practice_session || {};
-
-  // LiveState: 0 = practice, 1 = race/qualifying
-  const isPractice = es.LiveState === 0;
-
-  // Toggle top bar layout mode
-  document.querySelector('.top-bar').classList.toggle('practice', isPractice);
-
-  // ── Title pill ─────────────────────────────────────────────
-  if (isPractice) {
-    document.getElementById('class-name').textContent  = 'OPEN PRACTICE';
-    document.getElementById('heat-badge').textContent  = 'PRACTICE';
-    document.getElementById('round-badge').textContent = es.EventName?.toUpperCase() || 'LIVE';
-    document.getElementById('race-num').textContent    = '—';
-  } else {
-    document.getElementById('class-name').textContent  = (rs.RaceClassName || re.Race?.RaceClassName || '—').toUpperCase();
-    document.getElementById('heat-badge').textContent  = (rs.RaceClassInformation || re.Race?.RaceInformation || 'HEAT').toUpperCase();
-    const rl = rs.RoundLetterTypeOrderNumberDisplay || '';
-    document.getElementById('round-badge').textContent = rl ? `ROUND ${rl}` : 'MAIN';
-    document.getElementById('race-num').textContent    = rs.RaceOrderNumber || re.Race?.OrderNumber || '—';
-  }
-
-  // ── Top qualifier ──────────────────────────────────────────
-  // TopQualifierDisplay comes directly from the scoring engine (set from prior
-  // qualifying results). Fall back to fastest-lap leader during live race if empty.
-  if (isPractice) {
-    // Practice: show fastest driver on track so far
-    const practiceSessions = (ps.LivePracticeSessions || []).slice(0, SLOTS);
-    let fieldFastP = null;
-    practiceSessions.forEach(e => {
-      if (e.FastestLap && (fieldFastP == null || e.FastestLap < fieldFastP)) fieldFastP = e.FastestLap;
-    });
-    const tqP = practiceSessions.find(e => e.FastestLap === fieldFastP) || practiceSessions[0];
-    if (tqP) {
-      document.getElementById('tq-name').textContent =
-        ((tqP.DriverName || '') + ' ' + (tqP.DriverLastName || '')).trim().toUpperCase();
-      document.getElementById('tq-detail').innerHTML =
-        `${tqP.CompletedLaps || 0} laps &nbsp; ${fmtSec(tqP.FastestLap)}`;
-    } else {
-      document.getElementById('tq-name').textContent   = '—';
-      document.getElementById('tq-detail').textContent = '—';
-    }
-  } else {
-    // Race: use TopQualifierDisplay from scoring engine if available,
-    // otherwise derive from fastest lap in current entries
-    const tqDisplay = rs.TopQualifierDisplay || '';
-    if (tqDisplay) {
-      // Server gives us a pre-formatted string like "JOHN SMITH  12.784"
-      // Split on multiple spaces or the last number pattern
-      const match = tqDisplay.match(/^(.+?)\s{2,}(.+)$/);
-      if (match) {
-        document.getElementById('tq-name').textContent   = match[1].trim().toUpperCase();
-        document.getElementById('tq-detail').textContent = match[2].trim();
-      } else {
-        document.getElementById('tq-name').textContent   = tqDisplay.toUpperCase();
-        document.getElementById('tq-detail').textContent = '';
       }
-    } else {
-      // Fallback: derive from live lap data (works mid-race)
-      const raceEntries = (re.RaceEntries || []).slice(0, SLOTS);
-      let fieldFast = null;
-      raceEntries.forEach(e => {
-        if (e.FastestLap && (fieldFast == null || e.FastestLap < fieldFast)) fieldFast = e.FastestLap;
-      });
-      const tq = raceEntries.find(e => e.FastestLap === fieldFast) || raceEntries[0];
-      if (tq && tq.FastestLap) {
-        document.getElementById('tq-name').textContent =
-          ((tq.DriverName || '') + ' ' + (tq.DriverLastName || '')).trim().toUpperCase();
+
+      while (grid.children.length > SLOTS) grid.removeChild(grid.lastChild);
+    }
+
+    // ── Apply timer only (for SSE time events) ────────────────────────────────
+    function applyTimer(timeData, isPractice) {
+      if (isPractice) {
+        const remSec = parseHMS(timeData.SecondsRemaining);
+        const running = !!timeData.IsTimerRunning;
+        document.getElementById('timer-lbl').textContent = running ? 'TIME LEFT' : 'TIME';
+        if (running && remSec > 0) {
+          const curRem = cd.on ? (cd.target - Date.now()) / 1000 : -9999;
+          if (Math.abs(curRem - remSec) > 2) startCd(remSec);
+        } else {
+          stopCd(remSec);
+        }
+      } else {
+        const raceLenSec = parseHMS(timeData.RaceLength || '8:00');
+        const elapsedSec = parseHMS(timeData.TimeElapsed);
+        const remSec = Math.max(0, raceLenSec - elapsedSec);
+        const clockRunning = elapsedSec > 0 || timeData.FlagType === 1 || timeData.FlagType === 2
+          || lastRaceDisplayState === 3;
+        document.getElementById('timer-lbl').textContent = clockRunning ? 'TIME LEFT' : 'TIME';
+        if (clockRunning && remSec > 0) {
+          const curRem = cd.on ? (cd.target - Date.now()) / 1000 : -9999;
+          if (Math.abs(curRem - remSec) > 2) startCd(remSec);
+        } else {
+          stopCd(remSec);
+        }
+        setRaceState(lastRaceDisplayState, timeData.FlagType || 4, !!timeData.IsInCaution);
+      }
+    }
+
+    // ── Main update ────────────────────────────────────────────────────────────
+    function applyState(data) {
+      const es = data.event_state || {};
+      const rs = data.race_state || {};
+      const rt = data.race_time || {};
+      const re = data.race_entry || {};
+      const pt = data.practice_time || {};
+      const ps = data.practice_session || {};
+
+      // LiveState: 0 = practice, 1 = race/qualifying
+      const isPractice = es.LiveState === 0;
+
+      // Toggle top bar layout mode
+      document.querySelector('.top-bar').classList.toggle('practice', isPractice);
+
+      // ── Title pill ─────────────────────────────────────────────
+      if (isPractice) {
+        document.getElementById('class-name').textContent = 'OPEN PRACTICE';
+        document.getElementById('heat-badge').textContent = 'PRACTICE';
+        document.getElementById('round-badge').textContent = es.EventName?.toUpperCase() || 'LIVE';
+        document.getElementById('race-num').textContent = '—';
+      } else {
+        document.getElementById('class-name').textContent = (rs.RaceClassName || re.Race?.RaceClassName || '—').toUpperCase();
+        document.getElementById('heat-badge').textContent = (rs.RaceClassInformation || re.Race?.RaceInformation || 'HEAT').toUpperCase();
         const rl = rs.RoundLetterTypeOrderNumberDisplay || '';
-        const raceLenStr = fmtSec(parseHMS(rt.RaceLength || '8:00'));
-        document.getElementById('tq-detail').innerHTML =
-          `${tq.CompletedLaps || 0}/${raceLenStr} &nbsp;${fmtSec(tq.FastestLap)}` +
-          (rl ? ` <span class="rbadge">${rl}</span>` : '');
+        document.getElementById('round-badge').textContent = rl ? `ROUND ${rl}` : 'MAIN';
+        document.getElementById('race-num').textContent = rs.RaceOrderNumber || re.Race?.OrderNumber || '—';
+      }
+
+      // ── Top qualifier ──────────────────────────────────────────
+      // TopQualifierDisplay comes directly from the scoring engine (set from prior
+      // qualifying results). Fall back to fastest-lap leader during live race if empty.
+      if (isPractice) {
+        // Practice: show fastest driver on track so far
+        const practiceSessions = (ps.LivePracticeSessions || []).slice(0, SLOTS);
+        let fieldFastP = null;
+        practiceSessions.forEach(e => {
+          if (e.FastestLap && (fieldFastP == null || e.FastestLap < fieldFastP)) fieldFastP = e.FastestLap;
+        });
+        const tqP = practiceSessions.find(e => e.FastestLap === fieldFastP) || practiceSessions[0];
+        if (tqP) {
+          document.getElementById('tq-name').textContent =
+            ((tqP.DriverName || '') + ' ' + (tqP.DriverLastName || '')).trim().toUpperCase();
+          document.getElementById('tq-detail').innerHTML =
+            `${tqP.CompletedLaps || 0} laps &nbsp; ${fmtSec(tqP.FastestLap)}`;
+        } else {
+          document.getElementById('tq-name').textContent = '—';
+          document.getElementById('tq-detail').textContent = '—';
+        }
       } else {
-        document.getElementById('tq-name').textContent   = '—';
-        document.getElementById('tq-detail').textContent = '—';
+        // Race: use TopQualifierDisplay from scoring engine if available,
+        // otherwise derive from fastest lap in current entries
+        const tqDisplay = rs.TopQualifierDisplay || '';
+        if (tqDisplay) {
+          // Server gives us a pre-formatted string like "JOHN SMITH  12.784"
+          // Split on multiple spaces or the last number pattern
+          const match = tqDisplay.match(/^(.+?)\s{2,}(.+)$/);
+          if (match) {
+            document.getElementById('tq-name').textContent = match[1].trim().toUpperCase();
+            document.getElementById('tq-detail').textContent = match[2].trim();
+          } else {
+            document.getElementById('tq-name').textContent = tqDisplay.toUpperCase();
+            document.getElementById('tq-detail').textContent = '';
+          }
+        } else {
+          // Fallback: derive from live lap data (works mid-race)
+          const raceEntries = (re.RaceEntries || []).slice(0, SLOTS);
+          let fieldFast = null;
+          raceEntries.forEach(e => {
+            if (e.FastestLap && (fieldFast == null || e.FastestLap < fieldFast)) fieldFast = e.FastestLap;
+          });
+          const tq = raceEntries.find(e => e.FastestLap === fieldFast) || raceEntries[0];
+          if (tq && tq.FastestLap) {
+            document.getElementById('tq-name').textContent =
+              ((tq.DriverName || '') + ' ' + (tq.DriverLastName || '')).trim().toUpperCase();
+            const rl = rs.RoundLetterTypeOrderNumberDisplay || '';
+            const raceLenStr = fmtSec(parseHMS(rt.RaceLength || '8:00'));
+            document.getElementById('tq-detail').innerHTML =
+              `${tq.CompletedLaps || 0}/${raceLenStr} &nbsp;${fmtSec(tq.FastestLap)}` +
+              (rl ? ` <span class="rbadge">${rl}</span>` : '');
+          } else {
+            document.getElementById('tq-name').textContent = '—';
+            document.getElementById('tq-detail').textContent = '—';
+          }
+        }
+      }
+
+      // ── Flag / race state banner ───────────────────────────────
+      if (isPractice) {
+        // In practice just clear any race banners
+        setRaceState(0, 4, false);
+      } else {
+        lastRaceDisplayState = rs.RaceDisplayState || 0;
+        setRaceState(lastRaceDisplayState, rt.FlagType || 4, !!rt.IsInCaution);
+      }
+
+      // ── Timer ──────────────────────────────────────────────────
+      // NOTE: IsTimerRunning is unreliable — observed false even while TimeElapsed
+      // is advancing. Use RaceDisplayState===3 (racing) OR elapsed>0 as the signal.
+      if (isPractice) {
+        const remSec = parseHMS(pt.SecondsRemaining);
+        const running = !!pt.IsTimerRunning;
+        document.getElementById('timer-lbl').textContent = running ? 'TIME LEFT' : 'TIME';
+        if (running && remSec > 0) {
+          const curRem = cd.on ? (cd.target - Date.now()) / 1000 : -9999;
+          if (Math.abs(curRem - remSec) > 2) startCd(remSec);
+        } else {
+          stopCd(remSec);
+        }
+      } else {
+        const raceLenSec = parseHMS(rt.RaceLength || '8:00');
+        const elapsedSec = parseHMS(rt.TimeElapsed);
+        const remSec = Math.max(0, raceLenSec - elapsedSec);
+
+        // RaceDisplayState: 1=pre-race, 3=racing/green, 2=? — also treat elapsed>0 as running
+        // FlagType 1=green, 2=yellow, 3=red — any of these means clock is running
+        const raceActive = rs.RaceDisplayState === 3 || elapsedSec > 0;
+        const flagRunning = rt.FlagType === 1 || rt.FlagType === 2;
+        const clockRunning = raceActive || flagRunning;
+
+        document.getElementById('timer-lbl').textContent = clockRunning ? 'TIME LEFT' : 'TIME';
+        if (clockRunning && remSec > 0) {
+          // Resync if server's remaining time differs from our countdown by >2s
+          const curRem = cd.on ? (cd.target - Date.now()) / 1000 : -9999;
+          if (Math.abs(curRem - remSec) > 2) startCd(remSec);
+        } else {
+          stopCd(remSec);
+        }
+      }
+
+      // ── Driver grid ─────────────────────────────────────────────
+      // Prefer live_race_entry (pushed each lap) over race_entry (fetched once)
+      // live_race_entry uses: Position, DriverName (full), Laps, LapTime, FastestLap (floats),
+      //                       Pace (pre-formatted string), IsFastestLapInRace, SortTimeBehindLeader
+      const lre = data.live_race_entry;
+      const hasLiveEntries = lre && (lre.LiveRaceEntries || []).length > 0;
+
+      const raceEntries = hasLiveEntries
+        ? (lre.LiveRaceEntries || []).slice(0, SLOTS)
+        : (re.RaceEntries || []).slice(0, SLOTS);
+      const practiceSessions = (ps.LivePracticeSessions || []).slice(0, SLOTS);
+
+      if (isPractice) {
+        let fieldFastP = null;
+        practiceSessions.forEach(e => {
+          if (e.FastestLap && (fieldFastP == null || e.FastestLap < fieldFastP)) fieldFastP = e.FastestLap;
+        });
+        buildPracticeGrid(practiceSessions, fieldFastP);
+      } else {
+        let fieldFastR = null;
+        raceEntries.forEach(e => {
+          if (e.FastestLap && (fieldFastR == null || e.FastestLap < fieldFastR)) fieldFastR = e.FastestLap;
+        });
+        buildRaceGrid(raceEntries, parseHMS(rt.RaceLength || '8:00'), fieldFastR, hasLiveEntries);
       }
     }
-  }
 
-  // ── Flag ───────────────────────────────────────────────────
-  setFlag(rt.FlagType || 4, !!rt.IsInCaution);
+    // ── Poll ──────────────────────────────────────────────────────────────────
+    const connBadge = document.getElementById('conn-badge');
 
-  // ── Timer ──────────────────────────────────────────────────
-  if (isPractice) {
-    const remSec = parseHMS(pt.SecondsRemaining);
-    const running = !!pt.IsTimerRunning;
-    document.getElementById('timer-lbl').textContent = running ? 'TIME LEFT' : 'TIME';
-    if (running && remSec > 0) {
-      const curRem = cd.on ? (cd.target - Date.now()) / 1000 : -9999;
-      if (Math.abs(curRem - remSec) > 2) startCd(remSec);
-    } else {
-      stopCd(remSec);
+    async function fetchState() {
+      const r = await fetch(API + '/api/state', { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
     }
-  } else {
-    const raceLenSec = parseHMS(rt.RaceLength || '8:00');
-    const elapsedSec = parseHMS(rt.TimeElapsed);
-    const remSec     = Math.max(0, raceLenSec - elapsedSec);
-    const running    = !!rt.IsTimerRunning;
-    document.getElementById('timer-lbl').textContent = running ? 'TIME LEFT' : 'TIME';
-    if (running && remSec > 0) {
-      const curRem = cd.on ? (cd.target - Date.now()) / 1000 : -9999;
-      if (Math.abs(curRem - remSec) > 2) startCd(remSec);
-    } else {
-      stopCd(remSec);
+
+    // SSE — instant push from bridge whenever state changes
+    function connectSSE() {
+      const es = new EventSource(API + '/api/events');
+
+      es.addEventListener('state', e => {
+        try {
+          applyState(JSON.parse(e.data));
+          connBadge.classList.remove('on');
+        } catch (err) { /* ignore parse errors */ }
+      });
+
+      es.addEventListener('time', e => {
+        // Lightweight timer-only update — just refresh the timer without rebuilding the grid
+        try {
+          const d = JSON.parse(e.data);
+          if (d.race_time) applyTimer(d.race_time, false);
+          if (d.practice_time) applyTimer(d.practice_time, true);
+        } catch (err) { }
+      });
+
+      es.addEventListener('connection', e => {
+        try {
+          const d = JSON.parse(e.data);
+          if (d.status !== 'connected') {
+            connBadge.textContent = '⚡ Bridge disconnected';
+            connBadge.classList.add('on');
+          }
+        } catch (err) { }
+      });
+
+      es.onerror = () => {
+        connBadge.textContent = '⚡ SSE error — reconnecting…';
+        connBadge.classList.add('on');
+        // EventSource auto-reconnects; also kick a manual poll
+        setTimeout(() => fetchState().then(applyState).catch(() => { }), 2000);
+      };
     }
-  }
 
-  // ── Driver grid ─────────────────────────────────────────────
-  const raceEntries      = (re.RaceEntries || []).slice(0, SLOTS);
-  const practiceSessions = (ps.LivePracticeSessions || []).slice(0, SLOTS);
-
-  if (isPractice) {
-    let fieldFastP = null;
-    practiceSessions.forEach(e => {
-      if (e.FastestLap && (fieldFastP == null || e.FastestLap < fieldFastP)) fieldFastP = e.FastestLap;
-    });
-    buildPracticeGrid(practiceSessions, fieldFastP);
-  } else {
-    let fieldFastR = null;
-    raceEntries.forEach(e => {
-      if (e.FastestLap && (fieldFastR == null || e.FastestLap < fieldFastR)) fieldFastR = e.FastestLap;
-    });
-    buildRaceGrid(raceEntries, parseHMS(rt.RaceLength || '8:00'), fieldFastR);
-  }
-}
-
-// ── Poll ──────────────────────────────────────────────────────────────────
-const connBadge = document.getElementById('conn-badge');
-
-async function fetchState() {
-  const r = await fetch(API + '/api/state', { cache: 'no-store' });
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  return r.json();
-}
-
-// SSE — instant push from bridge whenever state changes
-function connectSSE() {
-  const es = new EventSource(API + '/api/events');
-
-  es.addEventListener('state', e => {
-    try {
-      applyState(JSON.parse(e.data));
-      connBadge.classList.remove('on');
-    } catch(err) { /* ignore parse errors */ }
-  });
-
-  es.addEventListener('time', e => {
-    // Lightweight timer-only update — just refresh the timer without rebuilding the grid
-    try {
-      const d = JSON.parse(e.data);
-      if (d.race_time)     applyTimer(d.race_time, false);
-      if (d.practice_time) applyTimer(d.practice_time, true);
-    } catch(err) {}
-  });
-
-  es.addEventListener('connection', e => {
-    try {
-      const d = JSON.parse(e.data);
-      if (d.status !== 'connected') {
-        connBadge.textContent = '⚡ Bridge disconnected';
+    // Fallback poll — keeps things in sync if SSE misses anything
+    async function poll() {
+      try {
+        applyState(await fetchState());
+        connBadge.classList.remove('on');
+      } catch (err) {
+        connBadge.textContent = '⚡ ' + err.message;
         connBadge.classList.add('on');
       }
-    } catch(err) {}
-  });
+    }
 
-  es.onerror = () => {
-    connBadge.textContent = '⚡ SSE error — reconnecting…';
-    connBadge.classList.add('on');
-    // EventSource auto-reconnects; also kick a manual poll
-    setTimeout(() => fetchState().then(applyState).catch(() => {}), 2000);
-  };
-}
-
-// Fallback poll — keeps things in sync if SSE misses anything
-async function poll() {
-  try {
-    applyState(await fetchState());
-    connBadge.classList.remove('on');
-  } catch (err) {
-    connBadge.textContent = '⚡ ' + err.message;
-    connBadge.classList.add('on');
-  }
-}
-
-// Start SSE for instant mode switching, poll every 2s as safety net
-connectSSE();
-poll();
-setInterval(poll, 2000);
-</script>
+    // Start SSE for instant mode switching, poll every 2s as safety net
+    connectSSE();
+    poll();
+    setInterval(poll, 2000);
+  </script>
 </body>
+
 </html>
