@@ -404,6 +404,8 @@ function handlePacket(type, data) {
               lapNumber:  newLap.LapNumber,
               fastestLap: driverBest,
               pace:       newLap.Pace || '',
+              className:  s.RaceClassName  || 'Unknown',
+              color:      s.RaceClassColor || '',
             });
           }
         });

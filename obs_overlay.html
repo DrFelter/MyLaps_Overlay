@@ -259,34 +259,78 @@ html, body {
 @keyframes cardflash { 0%{background:rgba(24,180,212,.2)} 100%{background:transparent} }
 .dc.flash { animation: cardflash .75s ease-out forwards; }
 
-/* Hot lap strip — pinned below header in practice mode */
-.hotlap-strip {
+/* ── Rolling class best ticker ──────────────────────────────────────────── */
+.ticker-wrap {
   position: absolute;
   top: var(--top-h);
   left: 0; right: 0;
   height: 0; overflow: hidden;
   background: var(--navy);
   border-bottom: 2px solid #f5c542;
-  display: flex; align-items: center;
-  padding: 0 28px; gap: 16px;
   transition: height 0.3s ease;
   z-index: 8; pointer-events: none;
 }
-.hotlap-strip.visible { height: 44px; }
-.hl-label {
-  font-size: 11px; font-weight: 700; letter-spacing: .14em;
-  color: #f5c542; text-transform: uppercase; flex-shrink: 0; white-space: nowrap;
+.ticker-wrap.visible { height: 40px; }
+
+/* Left label — pinned, doesn't scroll */
+.ticker-label {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: 120px;
+  background: #f5c542;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 900; letter-spacing: .12em;
+  color: var(--navy); text-transform: uppercase;
+  z-index: 2; flex-shrink: 0;
 }
-.hl-divider { width: 1px; height: 22px; background: rgba(255,255,255,0.12); flex-shrink: 0; }
-.hl-name {
-  font-size: 17px; font-weight: 800; color: var(--white);
-  text-transform: uppercase; letter-spacing: .03em;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0;
+
+/* Scroll viewport — starts after the label */
+.ticker-viewport {
+  position: absolute;
+  left: 120px; right: 0; top: 0; bottom: 0;
+  overflow: hidden;
 }
-.hl-lapnum { font-size: 13px; font-weight: 600; color: var(--silver); letter-spacing: .04em; flex-shrink: 0; white-space: nowrap; }
-.hl-time { font-size: 24px; font-weight: 900; color: #f5c542; font-variant-numeric: tabular-nums; letter-spacing: -.01em; line-height: 1; flex-shrink: 0; }
-@keyframes hl-flash { 0%{background:rgba(245,197,66,0.25)} 100%{background:var(--navy)} }
-.hotlap-strip.flash { animation: hl-flash 1.5s ease-out forwards; }
+
+/* The inner track that animates */
+.ticker-track {
+  display: flex; align-items: center;
+  height: 100%;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+/* One class entry in the ticker */
+.ticker-entry {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 0 32px 0 0;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+.ticker-entry.flash {
+  animation: ticker-flash 1.8s ease-out forwards;
+}
+@keyframes ticker-flash {
+  0%   { background: rgba(245,197,66,0.30); }
+  100% { background: transparent; }
+}
+
+.te-class {
+  font-size: 11px; font-weight: 800; letter-spacing: .1em;
+  color: var(--cyan); text-transform: uppercase;
+  padding: 2px 7px; border-radius: 3px;
+  background: rgba(24,180,212,0.12);
+  border: 1px solid rgba(24,180,212,0.3);
+}
+.te-driver {
+  font-size: 16px; font-weight: 800; color: var(--white);
+  text-transform: uppercase; letter-spacing: .02em;
+}
+.te-time {
+  font-size: 18px; font-weight: 900; color: #f5c542;
+  font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+}
+.te-sep {
+  font-size: 18px; color: rgba(255,255,255,0.15); margin-left: 32px;
+}
 
 /* Connection badge */
 .conn-badge {
@@ -296,7 +340,6 @@ html, body {
   font-size: 12px; font-weight: 700; color: #f5a623;
   letter-spacing: .08em; text-transform: uppercase;
   display: none; z-index: 20;
-}
 }
 .conn-badge.on { display: block; }
 </style>
@@ -346,14 +389,12 @@ html, body {
     <span class="status-txt" id="status-txt"></span>
   </div>
 
-  <!-- HOT LAP STRIP (practice mode — persists until mode changes) -->
-  <div class="hotlap-strip" id="hotlap-strip">
-    <span class="hl-label" id="hl-label">🔥 HOT LAP</span>
-    <div class="hl-divider"></div>
-    <span class="hl-name" id="hl-name">—</span>
-    <span class="hl-lapnum" id="hl-lapnum"></span>
-    <div class="hl-divider"></div>
-    <span class="hl-time" id="hl-time">—</span>
+  <!-- ROLLING CLASS BEST TICKER (practice mode) -->
+  <div class="ticker-wrap" id="ticker-wrap">
+    <div class="ticker-label">🔥 HOT LAPS</div>
+    <div class="ticker-viewport">
+      <div class="ticker-track" id="ticker-track"></div>
+    </div>
   </div>
 
   <!-- 5 × 2 GRID -->
@@ -658,27 +699,120 @@ function buildPracticeGrid(sessions, fieldFast) {
   while (grid.children.length > SLOTS) grid.removeChild(grid.lastChild);
 }
 
-// ── Hot lap strip ─────────────────────────────────────────────────────────
-const hlStrip  = document.getElementById('hotlap-strip');
-const hlLabel  = document.getElementById('hl-label');
-const hlName   = document.getElementById('hl-name');
-const hlLapnum = document.getElementById('hl-lapnum');
-const hlTime   = document.getElementById('hl-time');
+// ── Rolling class best ticker ─────────────────────────────────────────────
+// classBests: { className -> { driverName, lapTime, lapNumber, color, flash } }
+const classBests   = {};
+const tickerWrap   = document.getElementById('ticker-wrap');
+const tickerTrack  = document.getElementById('ticker-track');
 
-function showHotlap(d) {
-  hlLabel.textContent  = '🔥 HOT LAP';
-  hlName.textContent   = (d.driverName || '—').toUpperCase();
-  hlLapnum.textContent = d.lapNumber ? `LAP ${d.lapNumber}` : '';
-  hlTime.textContent   = fmtSec(d.lapTime);
+let tickerRaf      = null;
+let tickerPos      = 0;       // current X offset in px (negative = scrolled left)
+let tickerWidth    = 0;       // total width of one copy of the content
+let tickerSpeed    = 0.6;     // px per animation frame (~36px/sec at 60fps)
+let tickerBuilt    = false;
 
-  hlStrip.classList.remove('flash');
-  hlStrip.classList.add('visible');
-  void hlStrip.offsetWidth;
-  hlStrip.classList.add('flash');
+function buildTickerDOM() {
+  tickerTrack.innerHTML = '';
+
+  const classes = Object.keys(classBests);
+  if (classes.length === 0) {
+    tickerWrap.classList.remove('visible');
+    return;
+  }
+  tickerWrap.classList.add('visible');
+
+  // Build TWO copies of the content for seamless looping
+  for (let copy = 0; copy < 2; copy++) {
+    classes.forEach((cls, idx) => {
+      const b = classBests[cls];
+
+      const entry = document.createElement('div');
+      entry.className = 'ticker-entry' + (b.flash && copy === 0 ? ' flash' : '');
+      entry.dataset.cls = cls;
+      entry.dataset.copy = copy;
+
+      // Use RaceClassColor as a subtle tint on the class badge if available
+      const badgeStyle = b.color && b.color !== 'DarkGray'
+        ? `style="background:${b.color}22;border-color:${b.color}66;color:${b.color}"`
+        : '';
+
+      entry.innerHTML = `
+        <span class="te-class" ${badgeStyle}>${cls.toUpperCase()}</span>
+        <span class="te-driver">${(b.driverName || '—').toUpperCase()}</span>
+        <span class="te-time">${fmtSec(b.lapTime)}</span>
+        <span class="te-sep">·</span>`;
+
+      tickerTrack.appendChild(entry);
+    });
+  }
+
+  // Measure the width of one copy
+  // Give the browser a frame to render before measuring
+  requestAnimationFrame(() => {
+    const allEntries = tickerTrack.querySelectorAll('.ticker-entry[data-copy="0"]');
+    let w = 0;
+    allEntries.forEach(e => w += e.offsetWidth);
+    tickerWidth = w;
+    tickerBuilt = true;
+  });
 }
 
+function tickerTick() {
+  if (!tickerBuilt || tickerWidth === 0) {
+    tickerRaf = requestAnimationFrame(tickerTick);
+    return;
+  }
+
+  tickerPos -= tickerSpeed;
+  // When we've scrolled one full copy width, reset to 0 for seamless loop
+  if (Math.abs(tickerPos) >= tickerWidth) {
+    tickerPos = 0;
+  }
+  tickerTrack.style.transform = `translateX(${tickerPos}px)`;
+  tickerRaf = requestAnimationFrame(tickerTick);
+}
+
+function startTicker() {
+  if (tickerRaf) return;
+  tickerRaf = requestAnimationFrame(tickerTick);
+}
+
+function stopTicker() {
+  if (tickerRaf) { cancelAnimationFrame(tickerRaf); tickerRaf = null; }
+  tickerWrap.classList.remove('visible');
+  tickerTrack.innerHTML = '';
+  tickerPos = 0;
+  tickerBuilt = false;
+}
+
+// Called from bridge SSE hotlap event
+function showHotlap(d) {
+  const cls = d.className || 'UNKNOWN';
+
+  // Update the class best
+  classBests[cls] = {
+    driverName: d.driverName,
+    lapTime:    d.lapTime,
+    lapNumber:  d.lapNumber,
+    color:      d.color || '',
+    flash:      true,
+  };
+
+  // Rebuild DOM with flash on the new best entry
+  tickerBuilt = false;
+  buildTickerDOM();
+  startTicker();
+
+  // Clear flash flag after animation
+  setTimeout(() => {
+    if (classBests[cls]) classBests[cls].flash = false;
+  }, 2000);
+}
+
+// Called when switching away from practice
 function hideHotlapStrip() {
-  hlStrip.classList.remove('visible', 'flash-normal', 'flash-best', 'is-best');
+  stopTicker();
+  Object.keys(classBests).forEach(k => delete classBests[k]);
 }
 
 
@@ -887,7 +1021,28 @@ function connectSSE() {
 
   es.addEventListener('state', e => {
     try {
-      applyState(JSON.parse(e.data));
+      const data = JSON.parse(e.data);
+
+      // Seed ticker from existing practice session on connect/reconnect
+      const sessions = data?.practice_session?.LivePracticeSessions || [];
+      if (sessions.length > 0 && data?.event_state?.LiveState === 0) {
+        let changed = false;
+        sessions.forEach(s => {
+          const cls = s.RaceClassName || 'Unknown';
+          if (s.FastestLap && (!classBests[cls] || s.FastestLap < classBests[cls].lapTime)) {
+            classBests[cls] = {
+              driverName: s.DriverName,
+              lapTime:    s.FastestLap,
+              color:      s.RaceClassColor || '',
+              flash:      false,
+            };
+            changed = true;
+          }
+        });
+        if (changed) { tickerBuilt = false; buildTickerDOM(); startTicker(); }
+      }
+
+      applyState(data);
       connBadge.classList.remove('on');
     } catch(err) { /* ignore parse errors */ }
   });
