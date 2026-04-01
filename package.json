@@ -1,22 +1,14 @@
 {
-  "name": "mylapsoverlay",
+  "name": "livetime-bridge",
   "version": "1.0.0",
-  "main": "livetime_signalr_bridge.js",
+  "description": "LiveTime scoring engine WebSocket bridge for OBS overlays",
+  "main": "livetime_bridge.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node livetime_bridge.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
-    "@microsoft/signalr": "^10.0.0",
-    "@msgpack/msgpack": "^3.1.3",
-    "cors": "^2.8.6",
-    "express": "^5.2.1",
-    "msgpack-lite": "^0.1.26",
-    "node-fetch": "^3.3.2",
-    "pako": "^2.1.0",
-    "ws": "^8.20.0"
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "ws": "^8.16.0"
   }
 }
