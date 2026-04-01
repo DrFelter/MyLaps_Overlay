@@ -68,4 +68,4 @@ ip addr show | grep "inet " | grep -v 127
 
 Edit `LT_HOST` in `start.sh` or the systemd service if the scoring engine IP changes.
 
-Current scoring engine IP: **10.1.10.70:54235**
+
