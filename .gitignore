@@ -1,0 +1,72 @@
+# =========================
+# Node.js
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Optional: keep ONE lockfile if you're using it
+# (recommended to KEEP lockfiles for reproducibility)
+# Remove the above lockfile ignores if you want to commit them
+
+# =========================
+# Build output
+# =========================
+dist/
+build/
+.out/
+.next/
+.nuxt/
+.svelte-kit/
+coverage/
+
+# =========================
+# Environment variables
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDE / Editor
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# =========================
+# TypeScript
+# =========================
+*.tsbuildinfo
+
+# =========================
+# Cache
+# =========================
+.cache/
+.parcel-cache/
+.eslintcache
+
+# =========================
+# Misc
+# =========================
+tmp/
+temp/
