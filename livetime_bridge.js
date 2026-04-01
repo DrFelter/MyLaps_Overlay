@@ -267,7 +267,39 @@ app.get('/api/packets/stream', (req, res) => {
 });
 
 
-// ─── Live race entry cache (handles IsDelta merging) ─────────────────────
+// ─── Practice session cache (handles IsDelta merging) ────────────────────
+let practiceSessionCache = {};  // keyed by LID
+
+function mergePracticeSessions(data) {
+  const sessions = data.LivePracticeSessions || [];
+  if (!data.IsDelta) {
+    practiceSessionCache = {};
+  }
+  sessions.forEach(s => {
+    practiceSessionCache[s.LID] = {
+      LID:        s.LID,
+      Number:     s.Number,
+      DriverName: s.DriverName,
+      RaceClassName: s.RaceClassName,
+      RaceClassColor: s.RaceClassColor,
+      NumberOfLaps: s.NumberOfLaps,
+      FastestLap:   s.FastestLap  ? parseFloat(s.FastestLap)  : null,
+      AverageLap:   s.AverageLap  || null,
+      Overall:      s.Overall     || null,   // "34/3:49.209" — use as Pace
+      SessionLength: s.SessionLength || null,
+      // Last lap = most recent entry in the laps array (sorted newest-first)
+      LastLap: s.LivePracticeSessionLaps?.[0]?.LapTimeSeconds || null,
+    };
+  });
+  // Sort by fastest lap ascending (best time = P1)
+  return Object.values(practiceSessionCache).sort((a, b) => {
+    if (!a.FastestLap) return 1;
+    if (!b.FastestLap) return -1;
+    return a.FastestLap - b.FastestLap;
+  });
+}
+
+
 let liveRaceEntryCache = {};  // keyed by RaceEntryLID
 
 function mergeLiveRaceEntries(data) {
@@ -300,7 +332,8 @@ function handlePacket(type, data) {
 
     case 'LiveStateResponse':
       state.live.event_state = data;
-      // Push mode change immediately to all SSE clients
+      // Reset practice cache when switching modes
+      if (data.LiveState === 0) practiceSessionCache = {};
       pushSSE('state', state.live);
       console.log(`LiveState = ${data.LiveState} (0=practice, 1=race)`);
       break;
@@ -345,10 +378,44 @@ function handlePacket(type, data) {
       pushSSE('time', { practice_time: data });
       break;
 
-    case 'LivePracticeSessionResponse':
-      state.live.practice_session = data;
+    case 'LivePracticeSessionResponse': {
+      const sessions = data.LivePracticeSessions || [];
+      // Hot lap detection: only fire when a lap beats the overall field best.
+      if (data.IsDelta && sessions.length >= 1) {
+        const currentFieldBest = Object.values(practiceSessionCache).reduce((best, s) => {
+          return (s.FastestLap && (best === null || s.FastestLap < best)) ? s.FastestLap : best;
+        }, null);
+
+        sessions.forEach(s => {
+          const newLap = s.LivePracticeSessionLaps?.[0];
+          console.log(`[hotlap check] ${s.DriverName} | newLap:`, newLap ? `lap${newLap.LapNumber} ${newLap.LapTimeSeconds}s valid=${newLap.IsValidLap}` : 'NONE', `| FastestLap: ${s.FastestLap} | fieldBest: ${currentFieldBest}`);
+          if (!newLap || !newLap.IsValidLap) return;
+          const thisTime = newLap.LapTimeSeconds;
+          const driverBest = s.FastestLap ? parseFloat(s.FastestLap) : null;
+          const isPersonalBest = driverBest && Math.abs(thisTime - driverBest) < 0.005;
+          const beatsField = currentFieldBest === null || thisTime < currentFieldBest;
+          console.log(`[hotlap check] isPersonalBest=${isPersonalBest} beatsField=${beatsField} diff=${driverBest ? Math.abs(thisTime-driverBest).toFixed(4) : 'n/a'}`);
+
+          if (isPersonalBest && beatsField) {
+            pushSSE('hotlap', {
+              driverName: s.DriverName,
+              number:     s.Number,
+              lapTime:    thisTime,
+              lapNumber:  newLap.LapNumber,
+              fastestLap: driverBest,
+              pace:       newLap.Pace || '',
+            });
+          }
+        });
+      }
+      const sorted = mergePracticeSessions(data);
+      state.live.practice_session = {
+        IsDelta: data.IsDelta,
+        LivePracticeSessions: sorted,
+      };
       pushSSE('state', state.live);
       break;
+    }
 
     case 'RaceEntryByRaceResponse':
       state.live.race_entry = data;
