@@ -710,8 +710,11 @@ let tickerPos      = 0;       // current X offset in px (negative = scrolled lef
 let tickerWidth    = 0;       // total width of one copy of the content
 let tickerSpeed    = 0.6;     // px per animation frame (~36px/sec at 60fps)
 let tickerBuilt    = false;
+let tickerScrolling = false;  // false = static display, true = scrolling
 
 function buildTickerDOM() {
+  tickerPos = 0;
+  tickerTrack.style.transform = 'translateX(0px)';
   tickerTrack.innerHTML = '';
 
   const classes = Object.keys(classBests);
@@ -721,54 +724,62 @@ function buildTickerDOM() {
   }
   tickerWrap.classList.add('visible');
 
-  // Build TWO copies of the content for seamless looping
-  for (let copy = 0; copy < 2; copy++) {
-    classes.forEach((cls, idx) => {
+  function appendCopy(copyIdx) {
+    classes.forEach(cls => {
       const b = classBests[cls];
-
       const entry = document.createElement('div');
-      entry.className = 'ticker-entry' + (b.flash && copy === 0 ? ' flash' : '');
+      entry.className = 'ticker-entry' + (b.flash && copyIdx === 0 ? ' flash' : '');
       entry.dataset.cls = cls;
-      entry.dataset.copy = copy;
-
-      // Use RaceClassColor as a subtle tint on the class badge if available
+      entry.dataset.copy = copyIdx;
       const badgeStyle = b.color && b.color !== 'DarkGray'
-        ? `style="background:${b.color}22;border-color:${b.color}66;color:${b.color}"`
+        ? `style="background:${b.color}22;border-color:${b.color}66"`
         : '';
-
       entry.innerHTML = `
         <span class="te-class" ${badgeStyle}>${cls.toUpperCase()}</span>
         <span class="te-driver">${(b.driverName || '—').toUpperCase()}</span>
         <span class="te-time">${fmtSec(b.lapTime)}</span>
         <span class="te-sep">·</span>`;
-
       tickerTrack.appendChild(entry);
     });
   }
 
-  // Measure the width of one copy
-  // Give the browser a frame to render before measuring
+  // Build copy 0 first, then measure to decide static vs scrolling
+  appendCopy(0);
+
   requestAnimationFrame(() => {
     const allEntries = tickerTrack.querySelectorAll('.ticker-entry[data-copy="0"]');
     let w = 0;
     allEntries.forEach(e => w += e.offsetWidth);
     tickerWidth = w;
+
+    const viewportW = tickerTrack.parentElement.offsetWidth || 1800;
+
+    if (tickerWidth > 0 && tickerWidth > viewportW) {
+      // Content overflows — scroll it. Add enough copies to fill viewport + one extra.
+      tickerScrolling = true;
+      const totalCopies = Math.ceil(viewportW / tickerWidth) + 2;
+      for (let i = 1; i < totalCopies; i++) appendCopy(i);
+    } else {
+      // Content fits — show it static, no duplicates, no motion.
+      tickerScrolling = false;
+    }
+
     tickerBuilt = true;
   });
 }
 
 function tickerTick() {
-  if (!tickerBuilt || tickerWidth === 0) {
+  if (!tickerBuilt) {
     tickerRaf = requestAnimationFrame(tickerTick);
     return;
   }
 
-  tickerPos -= tickerSpeed;
-  // When we've scrolled one full copy width, reset to 0 for seamless loop
-  if (Math.abs(tickerPos) >= tickerWidth) {
-    tickerPos = 0;
+  if (tickerScrolling) {
+    tickerPos -= tickerSpeed;
+    if (Math.abs(tickerPos) >= tickerWidth) tickerPos = 0;
+    tickerTrack.style.transform = `translateX(${tickerPos}px)`;
   }
-  tickerTrack.style.transform = `translateX(${tickerPos}px)`;
+
   tickerRaf = requestAnimationFrame(tickerTick);
 }
 
@@ -783,6 +794,7 @@ function stopTicker() {
   tickerTrack.innerHTML = '';
   tickerPos = 0;
   tickerBuilt = false;
+  tickerScrolling = false;
 }
 
 // Called from bridge SSE hotlap event

@@ -394,9 +394,17 @@ function handlePacket(type, data) {
           const driverBest = s.FastestLap ? parseFloat(s.FastestLap) : null;
           const isPersonalBest = driverBest && Math.abs(thisTime - driverBest) < 0.005;
           const beatsField = currentFieldBest === null || thisTime < currentFieldBest;
-          console.log(`[hotlap check] isPersonalBest=${isPersonalBest} beatsField=${beatsField} diff=${driverBest ? Math.abs(thisTime-driverBest).toFixed(4) : 'n/a'}`);
 
-          if (isPersonalBest && beatsField) {
+          // Sanity check: reject if the lap is more than 20% faster than the driver's
+          // own best OR the field best — likely a track cut, not a real hot lap.
+          const CUT_THRESHOLD = 0.80;
+          const suspiciousVsOwn   = driverBest        && thisTime < driverBest * CUT_THRESHOLD;
+          const suspiciousVsField = currentFieldBest  && thisTime < currentFieldBest * CUT_THRESHOLD;
+          const isSuspicious = suspiciousVsOwn || suspiciousVsField;
+
+          console.log(`[hotlap check] isPersonalBest=${isPersonalBest} beatsField=${beatsField} diff=${driverBest ? Math.abs(thisTime-driverBest).toFixed(4) : 'n/a'} isSuspicious=${isSuspicious}`);
+
+          if (isPersonalBest && beatsField && !isSuspicious) {
             pushSSE('hotlap', {
               driverName: s.DriverName,
               number:     s.Number,
