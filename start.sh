@@ -3,7 +3,7 @@
 # Edit LT_HOST below if the scoring engine IP changes
 
 export LT_HOST=10.1.10.70:54235
-export PORT=8000
+export PORT=8080
 
 echo "Starting LiveTime bridge..."
 echo "  Scoring engine: $LT_HOST"

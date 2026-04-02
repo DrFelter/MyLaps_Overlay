@@ -2,7 +2,7 @@
 //
 // Requirements:  npm install express cors ws
 // Run:
-//   set LT_HOST=192.168.68.38:54235
+//   set LT_HOST=10.1.10.70:54235
 //   node livetime_bridge.js
 
 const express   = require('express');
@@ -11,7 +11,7 @@ const WebSocket = require('ws');
 const crypto    = require('crypto');
 const zlib      = require('zlib');
 
-const PORT    = Number(process.env.PORT   || 8000);
+const PORT    = Number(process.env.PORT   || 8080);
 const LT_HOST = process.env.LT_HOST || '10.1.10.70:54235';
 const DEBUG   = process.env.DEBUG === '1';
 

@@ -47,9 +47,9 @@ sudo journalctl -u livetime-bridge -f    # watch live logs
 3. Check **"Transparent background"**
 4. Set URL to:
    ```
-   http://<ubuntu-ip>:8000/obs_overlay.html?api=http://<ubuntu-ip>:8000
+   http://<ubuntu-ip>:8080/obs_overlay.html?api=http://<ubuntu-ip>:8080
    ```
-   Example: `http://192.168.1.50:8000/obs_overlay.html?api=http://192.168.1.50:8000`
+   Example: `http://192.168.1.50:8080/obs_overlay.html?api=http://192.168.1.50:8080`
 
 **Find the Ubuntu IP:**
 ```bash
@@ -60,9 +60,9 @@ ip addr show | grep "inet " | grep -v 127
 
 | URL | Description |
 |-----|-------------|
-| `http://<ip>:8000/packets` | Live packet monitor (browser) |
-| `http://<ip>:8000/api/state` | Current decoded state (JSON) |
-| `http://<ip>:8000/api/health` | Connection status |
+| `http://<ip>:8080/packets` | Live packet monitor (browser) |
+| `http://<ip>:8080/api/state` | Current decoded state (JSON) |
+| `http://<ip>:8080/api/health` | Connection status |
 
 ## Config
 

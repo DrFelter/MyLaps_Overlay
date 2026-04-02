@@ -32,7 +32,7 @@ Type=simple
 User=$SERVICE_USER
 WorkingDirectory=$SCRIPT_DIR
 Environment=LT_HOST=10.1.10.70:54235
-Environment=PORT=8000
+Environment=PORT=8080
 ExecStart=/usr/bin/node livetime_bridge.js
 Restart=always
 RestartSec=5
