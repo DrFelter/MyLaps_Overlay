@@ -396,11 +396,11 @@ function handlePacket(type, data) {
           const isPersonalBest = driverBest && Math.abs(thisTime - driverBest) < 0.005;
           const beatsField = currentFieldBest === null || thisTime < currentFieldBest;
 
-          // Sanity check: reject if the lap is more than 20% faster than the driver's
-          // own best OR the field best — likely a track cut, not a real hot lap.
-          const CUT_THRESHOLD = 0.80;
-          const suspiciousVsOwn   = driverBest        && thisTime < driverBest * CUT_THRESHOLD;
-          const suspiciousVsField = currentFieldBest  && thisTime < currentFieldBest * CUT_THRESHOLD;
+          // Sanity check: reject if lap improvement exceeds what's physically plausible.
+          // log10 curve: allowed window shrinks as lap times get faster (e.g. 0.57s at 14s, 0.30s at 4s).
+          const LOG_SCALE = 0.5;
+          const suspiciousVsOwn   = driverBest       && thisTime < driverBest       - Math.log10(driverBest)       * LOG_SCALE;
+          const suspiciousVsField = currentFieldBest && thisTime < currentFieldBest - Math.log10(currentFieldBest) * LOG_SCALE;
           const isSuspicious = suspiciousVsOwn || suspiciousVsField;
 
           console.log(`[hotlap check] isPersonalBest=${isPersonalBest} beatsField=${beatsField} diff=${driverBest ? Math.abs(thisTime-driverBest).toFixed(4) : 'n/a'} isSuspicious=${isSuspicious}`);
