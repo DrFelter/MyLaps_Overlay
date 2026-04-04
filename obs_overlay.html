@@ -910,8 +910,8 @@
         barClass = 'red';
         bannerText = '■  RED FLAG  —  RACE STOPPED  ■';
 
-      } else if (flagType === 6 || raceDisplayState === 4) {
-        // Checkered / finished
+      } else if (raceDisplayState === 4 || (flagType === 6 && raceDisplayState >= 3)) {
+        // Checkered / finished — only show if race is actually active/done (guard against pre-race FlagType=6 from prior race)
         stripClass = 'finish';
         barClass = 'finish';
         bannerText = '⛿  CHECKERED FLAG  —  RACE COMPLETE  ⛿';
@@ -1273,7 +1273,8 @@
         document.getElementById('timer-lbl').textContent = clockRunning ? 'TIME LEFT' : 'TIME';
         if (clockRunning && remSec > 0) {
           const curRem = cd.on ? (cd.target - Date.now()) / 1000 : -9999;
-          if (Math.abs(curRem - remSec) > 2) startCd(remSec);
+          // Only resync if the server shows MORE elapsed time (less remaining) — never jump backward
+          if (curRem - remSec > 2 || !cd.on) startCd(remSec);
         } else {
           stopCd(remSec);
         }
@@ -1404,9 +1405,9 @@
 
         document.getElementById('timer-lbl').textContent = clockRunning ? 'TIME LEFT' : 'TIME';
         if (clockRunning && remSec > 0) {
-          // Resync if server's remaining time differs from our countdown by >2s
+          // Only resync if server shows MORE elapsed time (less remaining) — never jump backward
           const curRem = cd.on ? (cd.target - Date.now()) / 1000 : -9999;
-          if (Math.abs(curRem - remSec) > 2) startCd(remSec);
+          if (curRem - remSec > 2 || !cd.on) startCd(remSec);
         } else {
           stopCd(remSec);
         }
