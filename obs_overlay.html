@@ -358,6 +358,14 @@
       color: #fff;
     }
 
+    .status-bar.green {
+      background: rgba(61, 220, 132, 0.90);
+    }
+
+    .status-bar.green .status-txt {
+      color: #0b1020;
+    }
+
     .status-bar.finish {
       background: rgba(255, 255, 255, 0.92);
     }
@@ -839,6 +847,9 @@
     let cd = { on: false, target: 0 };
     let raf = null;
     let lastRaceDisplayState = 0;  // updated in applyState, used in applyTimer
+    let raceStartMs = null;        // Date.now() at horn, supplied by bridge via race_start_ms
+    let showRaceStartedBanner = false;
+    let raceStartBannerTimer = null;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     const parseHMS = s => {
@@ -862,8 +873,9 @@
     const $col = document.getElementById('colon');
 
     function renderSec(sec) {
-      const abs = Math.max(0, Math.round(sec));
-      $min.textContent = Math.floor(abs / 60);
+      const neg = sec < 0;
+      const abs = Math.round(Math.abs(sec));
+      $min.textContent = (neg ? '-' : '') + Math.floor(abs / 60);
       $sec.textContent = String(abs % 60).padStart(2, '0');
     }
     function tickCd() {
@@ -888,7 +900,7 @@
     // RaceDisplayState: 0=idle, 1=pre-race/staging, 2=all checked in/ready, 3=racing, 4=finished
     // FlagType:         1=green, 2=yellow, 3=red, 4=none/purple, 5=white, 6=checker
 
-    function setRaceState(raceDisplayState, flagType, inCaution) {
+    function setRaceState(raceDisplayState, flagType, inCaution, raceJustStarted = false) {
       const strip = document.getElementById('flag-strip');
       const statusBar = document.getElementById('status-bar');
       const statusTxt = document.getElementById('status-txt');
@@ -910,11 +922,15 @@
         barClass = 'red';
         bannerText = '■  RED FLAG  —  RACE STOPPED  ■';
 
-      } else if (raceDisplayState === 4 || (flagType === 6 && raceDisplayState >= 3)) {
-        // Checkered / finished — only show if race is actually active/done (guard against pre-race FlagType=6 from prior race)
+      } else if (raceDisplayState === 4) {
+        // Checkered / finished — only on definitive finished state; FlagType=6 alone is unreliable
+        // (scoring engine leaves it at 6 from the prior race during pre-race staging)
         stripClass = 'finish';
         barClass = 'finish';
         bannerText = '⛿  CHECKERED FLAG  —  RACE COMPLETE  ⛿';
+      } else if (flagType === 6) {
+        // FlagType=6 without raceDisplayState=4: just show the strip, no banner
+        stripClass = 'finish';
 
       } else if (flagType === 5) {
         // White flag — last lap
@@ -922,10 +938,16 @@
         barClass = '';   // no banner, just the strip
         bannerText = '';
 
-      } else if (flagType === 1 || raceDisplayState === 3) {
-        // Green flag / racing
+      } else if (raceJustStarted && raceDisplayState === 3) {
+        // Horn just fired — brief "GO" banner before FlagType updates to green
         stripClass = 'green';
-        barClass = '';   // no banner during normal racing
+        barClass = 'green';
+        bannerText = '🏁  GO  —  RACE STARTED';
+
+      } else if (flagType === 1 || raceDisplayState === 3) {
+        // Green flag / racing in progress — no banner
+        stripClass = 'green';
+        barClass = '';
         bannerText = '';
 
       } else if (raceDisplayState === 2) {
@@ -1265,19 +1287,10 @@
           stopCd(remSec);
         }
       } else {
-        const raceLenSec = parseHMS(timeData.RaceLength || '8:00');
-        const elapsedSec = parseHMS(timeData.TimeElapsed);
-        const remSec = Math.max(0, raceLenSec - elapsedSec);
-        const clockRunning = elapsedSec > 0 || timeData.FlagType === 1 || timeData.FlagType === 2
-          || lastRaceDisplayState === 3;
-        document.getElementById('timer-lbl').textContent = clockRunning ? 'TIME LEFT' : 'TIME';
-        if (clockRunning && remSec > 0) {
-          const curRem = cd.on ? (cd.target - Date.now()) / 1000 : -9999;
-          // Only resync if the server shows MORE elapsed time (less remaining) — never jump backward
-          if (curRem - remSec > 2 || !cd.on) startCd(remSec);
-        } else {
-          stopCd(remSec);
-        }
+        // Race mode: once the master clock is running, ignore all server time packets entirely
+        if (raceStartMs) return;
+
+        // Pre-race fallback only — update flag strip from time packet
         setRaceState(lastRaceDisplayState, timeData.FlagType || 4, !!timeData.IsInCaution);
       }
     }
@@ -1370,13 +1383,24 @@
         }
       }
 
+      // ── Race-start banner trigger ──────────────────────────────
+      // Detect horn: bridge sets race_start_ms the moment RaceDisplayState first hits 3.
+      // Show a brief "GO" banner, auto-clear after 3 s so it doesn't linger into the race.
+      if (!isPractice && data.race_start_ms && data.race_start_ms !== raceStartMs) {
+        raceStartMs = data.race_start_ms;
+        showRaceStartedBanner = true;
+        if (raceStartBannerTimer) clearTimeout(raceStartBannerTimer);
+        raceStartBannerTimer = setTimeout(() => { showRaceStartedBanner = false; }, 3000);
+      }
+      if (!data.race_start_ms) { raceStartMs = null; showRaceStartedBanner = false; }
+
       // ── Flag / race state banner ───────────────────────────────
       if (isPractice) {
         // In practice just clear any race banners
-        setRaceState(0, 4, false);
+        setRaceState(0, 4, false, false);
       } else {
         lastRaceDisplayState = rs.RaceDisplayState || 0;
-        setRaceState(lastRaceDisplayState, rt.FlagType || 4, !!rt.IsInCaution);
+        setRaceState(lastRaceDisplayState, rt.FlagType || 4, !!rt.IsInCaution, showRaceStartedBanner);
       }
 
       // ── Timer ──────────────────────────────────────────────────
@@ -1394,23 +1418,17 @@
         }
       } else {
         const raceLenSec = parseHMS(rt.RaceLength || '8:00');
-        const elapsedSec = parseHMS(rt.TimeElapsed);
-        const remSec = Math.max(0, raceLenSec - elapsedSec);
+        const racing = rs.RaceDisplayState === 3;
+        document.getElementById('timer-lbl').textContent = (raceStartMs || racing) ? 'TIME LEFT' : 'TIME';
 
-        // RaceDisplayState: 1=pre-race, 3=racing/green, 2=? — also treat elapsed>0 as running
-        // FlagType 1=green, 2=yellow, 3=red — any of these means clock is running
-        const raceActive = rs.RaceDisplayState === 3 || elapsedSec > 0;
-        const flagRunning = rt.FlagType === 1 || rt.FlagType === 2;
-        const clockRunning = raceActive || flagRunning;
-
-        document.getElementById('timer-lbl').textContent = clockRunning ? 'TIME LEFT' : 'TIME';
-        if (clockRunning && remSec > 0) {
-          // Only resync if server shows MORE elapsed time (less remaining) — never jump backward
-          const curRem = cd.on ? (cd.target - Date.now()) / 1000 : -9999;
-          if (curRem - remSec > 2 || !cd.on) startCd(remSec);
-        } else {
-          stopCd(remSec);
+        if (raceStartMs && !cd.on) {
+          // Horn fired — start master clock once from race length, never resync
+          startCd(raceLenSec);
+        } else if (!raceStartMs && !racing) {
+          // Pre-race: show static race length, clock off
+          stopCd(raceLenSec);
         }
+        // If cd.on: let it run freely — ignore all server time packets
       }
 
       // ── Driver grid ─────────────────────────────────────────────

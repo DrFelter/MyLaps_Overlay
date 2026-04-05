@@ -45,8 +45,20 @@ function encodePacket(obj) {
   return compressed.toString('base64');
 }
 
+// Parse "M:SS.mmm", "MM:SS", or bare seconds to a float
+function parseHMS(s) {
+  if (!s) return 0;
+  const str = String(s).trim();
+  const parts = str.split(':').map(Number);
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return parseFloat(str) || 0;
+}
+
 // ─── State ────────────────────────────────────────────────────────────────
-let currentRaceLID = null;
+let currentRaceLID       = null;
+let maxRaceElapsedSec    = 0;   // highest TimeElapsed seen this race (guards against IFMAR per-driver clock resets)
+let bridgeRaceDisplayState = 0; // last known RaceDisplayState, used to detect horn (0→3 transition)
 let wsRef          = null;
 let invocId        = 100;
 
@@ -57,6 +69,7 @@ const state = {
     event_state:      null,
     race_state:       null,
     race_time:        null,
+    race_start_ms:    null,   // ms timestamp (Date.now()) when RaceDisplayState first hit 3 (horn)
     practice_state:   null,
     practice_time:    null,
     practice_session: null,
@@ -358,16 +371,42 @@ function handlePacket(type, data) {
         currentRaceLID = data.RaceLID;
         liveRaceEntryCache = {};  // reset for new race
         state.live.live_race_entry = null;
+        state.live.race_start_ms = null;
+        maxRaceElapsedSec = 0;
+        bridgeRaceDisplayState = 0;
         console.log(`Race changed → RaceLID=${currentRaceLID}, fetching entries`);
         setTimeout(() => requestRaceEntries(currentRaceLID), 200);
       }
+      // Detect horn: first transition into RaceDisplayState=3 marks the master clock start
+      if (data.RaceDisplayState === 3 && bridgeRaceDisplayState !== 3 && !state.live.race_start_ms) {
+        state.live.race_start_ms = Date.now();
+        console.log(`Race horn detected → race_start_ms=${state.live.race_start_ms}`);
+      }
+      // Clear master clock if race goes back to pre-race or idle
+      if (data.RaceDisplayState < 3) {
+        state.live.race_start_ms = null;
+        maxRaceElapsedSec = 0;
+      }
+      bridgeRaceDisplayState = data.RaceDisplayState || 0;
       pushSSE('state', state.live);
       break;
 
-    case 'LiveRaceTimeSyncResponse':
-      state.live.race_time = data;
-      pushSSE('time', { race_time: data });
+    case 'LiveRaceTimeSyncResponse': {
+      // In IFMAR (qualifying) each driver has an individual clock that starts when
+      // they first cross the line, so different drivers send different TimeElapsed
+      // values. Track the maximum seen so the displayed clock never jumps backward.
+      // In heads-up races all drivers share the same global clock so max = real clock.
+      const newElapsedSec = parseHMS(data.TimeElapsed);
+      if (newElapsedSec >= maxRaceElapsedSec) {
+        maxRaceElapsedSec = newElapsedSec;
+        state.live.race_time = data;
+      } else {
+        // Keep the max elapsed but take the latest FlagType/RaceLength/etc from this packet
+        state.live.race_time = { ...data, TimeElapsed: state.live.race_time?.TimeElapsed || data.TimeElapsed };
+      }
+      pushSSE('time', { race_time: state.live.race_time });
       break;
+    }
 
     case 'LivePracticeStateResponse':
       state.live.practice_state = data;
