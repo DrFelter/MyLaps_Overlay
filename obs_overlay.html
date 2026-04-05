@@ -850,6 +850,7 @@
     let raceStartMs = null;        // Date.now() at horn, supplied by bridge via race_start_ms
     let showRaceStartedBanner = false;
     let raceStartBannerTimer = null;
+    let practiceSlots = new Array(SLOTS).fill(null); // pinned slot map: index → driver LID
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     const parseHMS = s => {
@@ -1441,11 +1442,38 @@
       const raceEntries = hasLiveEntries
         ? (lre.LiveRaceEntries || []).slice(0, SLOTS)
         : (re.RaceEntries || []).slice(0, SLOTS);
-      const practiceSessions = (ps.LivePracticeSessions || []).slice(0, SLOTS);
+      // ── Practice slot pinning ──────────────────────────────────
+      // Hidden sort: rank all sessions by fastest recent LastLap to pick the top 10 active drivers.
+      // Visible sort: once assigned a slot, a driver stays pinned there so the grid doesn't jump.
+      // Drivers drop their slot when they leave the top-10 active set; new drivers take the lowest free slot.
+      const allSessions = ps.LivePracticeSessions || [];
+      const top10 = [...allSessions]
+        .sort((a, b) => {
+          if (!a.LastLap && !b.LastLap) return 0;
+          if (!a.LastLap) return 1;
+          if (!b.LastLap) return -1;
+          return a.LastLap - b.LastLap;
+        })
+        .slice(0, SLOTS);
+
+      const activeLids = new Set(top10.map(e => e.LID));
+      const sessionByLid = Object.fromEntries(top10.map(e => [e.LID, e]));
+
+      // Retain active drivers in their current relative order (compacts out gaps),
+      // then append any newly active drivers not yet assigned a slot.
+      const retained  = practiceSlots.filter(lid => lid && activeLids.has(lid));
+      const retainSet = new Set(retained);
+      const incoming  = top10.map(e => e.LID).filter(lid => !retainSet.has(lid));
+      const combined  = [...retained, ...incoming];
+      practiceSlots   = Array.from({ length: SLOTS }, (_, i) => combined[i] ?? null);
+
+      // Build the ordered list from pinned slots (null = empty slot, renders as —)
+      const practiceSessions = practiceSlots.map(lid => sessionByLid[lid] ?? null);
 
       if (isPractice) {
+        // fieldFast from the active top-10 (top10 has no nulls, practiceSessions does)
         let fieldFastP = null;
-        practiceSessions.forEach(e => {
+        top10.forEach(e => {
           if (e.FastestLap && (fieldFastP == null || e.FastestLap < fieldFastP)) fieldFastP = e.FastestLap;
         });
         buildPracticeGrid(practiceSessions, fieldFastP);
