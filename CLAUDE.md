@@ -119,3 +119,29 @@ Prevents false positives when a new driver's first lap trivially equals their ow
 - Racing 1/12 scale 17.5 Masters class
 - Target: Cleveland US Indoor Championships November 2026
 - Training partners: Chuck Lonergan, Andrew Knapp
+
+## Related Project: MyLaps (d:\code\MyLaps)
+MyLaps is a separate Python system that reads the physical AMB/MyLaps P3 decoder directly
+over TCP and records per-transponder lap times into SQLite. It consumes this overlay's API
+to auto-assign driver names and classes without manual claiming.
+
+**How MyLaps uses this project:**
+- Polls `GET /api/state` every 2 seconds via `decoder/overlay_client.py`
+- Reads `live.event_state.LiveState` — only active when `1` (race/qualifying), skips `0` (practice)
+- Reads `live.live_race_entry.LiveRaceEntries[*]`: `DriverName`, `LapTime`, `RaceClassName`
+- Reads `live.practice_session.LivePracticeSessions[*]`: `DriverName`, `LastLap`, `RaceClassName`
+- Matches LiveTime drivers to MyLaps transponders using name similarity + lap time correlation
+  (same physical loop trigger = near-identical lap times, tolerance 10ms)
+- Approved matches build a `class_conversions` table (LiveTime class → MyLaps class) and
+  `name_mappings` table so future matches are fully automatic
+
+**This project is read-only from MyLaps' perspective** — MyLaps never writes to or modifies
+anything in MylapsOverlay.
+
+**Key constraint:** LiveTime packets never contain transponder numbers. The link between a
+transponder (MyLaps) and a driver (LiveTime) is established via lap time fingerprinting +
+fuzzy name matching. Once confirmed, it's stored in MyLaps' `config.sqlite`.
+
+**LiveState values matter:** MyLaps' overlay client uses `LiveState` to gate all activity.
+Do not change the `LiveState` semantics (`0=practice, 1=race`) without updating
+`overlay_client.py` in MyLaps as well.

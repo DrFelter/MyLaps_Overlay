@@ -509,6 +509,20 @@ function handlePacket(type, data) {
 }
 
 // ─── SignalR client ───────────────────────────────────────────────────────
+let reconnectDelay = 3000;  // starts at 3s, backs off to 30s max
+
+function scheduleReconnect() {
+  state.connection.status = 'reconnecting';
+  pushSSE('connection', { status: 'reconnecting' });
+  console.log(`Reconnecting in ${reconnectDelay / 1000}s…`);
+  setTimeout(() => {
+    connectSignalR().catch(() => {
+      reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+      scheduleReconnect();
+    });
+  }, reconnectDelay);
+}
+
 async function connectSignalR() {
   state.connection.status = 'connecting';
 
@@ -533,6 +547,7 @@ async function connectSignalR() {
 
   ws.on('open', () => {
     state.connection.status = 'connected';
+    reconnectDelay = 3000;  // reset backoff on successful connect
     log('WS connected');
     send({ protocol: 'json', version: 1 });
   });
@@ -578,17 +593,14 @@ async function connectSignalR() {
     state.connection.status = 'disconnected';
     state.connection.reconnects++;
     pushSSE('connection', { status: 'disconnected' });
-    log('WS closed, reconnecting in 3s');
-    setTimeout(() => connectSignalR().catch(err => {
-      state.connection.status = 'error';
-      state.connection.last_error = String(err.message || err);
-    }), 3000);
+    log('WS closed');
+    scheduleReconnect();
   });
 
   ws.on('error', err => {
-    state.connection.status = 'error';
     state.connection.last_error = err.message;
     log('WS error', err.message);
+    // 'close' always fires after 'error' in the ws library — reconnect handled there
   });
 }
 
@@ -600,11 +612,5 @@ app.listen(PORT, async () => {
   console.log(`  /packets            – live packet monitor (browser)`);
   console.log(`  /api/packets        – last 50 decoded packets (JSON)`);
   console.log(`  /api/packets/stream – SSE stream of raw packets`);
-  try {
-    await connectSignalR();
-  } catch (e) {
-    state.connection.status = 'error';
-    state.connection.last_error = String(e.message || e);
-    console.error('Initial connect failed:', e.message);
-  }
+  connectSignalR().catch(() => scheduleReconnect());
 });
