@@ -929,8 +929,9 @@
         stripClass = 'finish';
         barClass = 'finish';
         bannerText = '⛿  CHECKERED FLAG  —  RACE COMPLETE  ⛿';
-      } else if (flagType === 6) {
+      } else if (flagType === 6 && raceDisplayState !== 3) {
         // FlagType=6 without raceDisplayState=4: just show the strip, no banner
+        // Guard raceDisplayState===3: engine leaves FlagType=6 from prior race at start of new race
         stripClass = 'finish';
 
       } else if (flagType === 5) {
