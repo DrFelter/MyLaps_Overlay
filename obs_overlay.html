@@ -1425,8 +1425,10 @@
         document.getElementById('timer-lbl').textContent = (raceStartMs || racing) ? 'TIME LEFT' : 'TIME';
 
         if (raceStartMs && !cd.on) {
-          // Horn fired — start master clock once from race length, never resync
-          startCd(raceLenSec);
+          // Horn fired — start master clock. Subtract time already elapsed since horn so the
+          // countdown is accurate even when race_start_ms was derived late (heads-up fallback).
+          const elapsedSinceHorn = Math.max(0, (Date.now() - raceStartMs) / 1000);
+          startCd(Math.max(0, raceLenSec - elapsedSinceHorn));
         } else if (!raceStartMs && !racing) {
           // Pre-race: show static race length, clock off
           stopCd(raceLenSec);

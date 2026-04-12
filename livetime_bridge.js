@@ -404,6 +404,15 @@ function handlePacket(type, data) {
         // Keep the max elapsed but take the latest FlagType/RaceLength/etc from this packet
         state.live.race_time = { ...data, TimeElapsed: state.live.race_time?.TimeElapsed || data.TimeElapsed };
       }
+      // Heads-up fallback: RaceDisplayState===3 transition may not fire (or may be missed).
+      // If TimeElapsed > 0 but race_start_ms was never set, derive it from the server clock so
+      // the overlay master timer can start. IFMAR is unaffected — race_start_ms is already set
+      // from the horn detection before any individual driver clock begins ticking.
+      if (maxRaceElapsedSec > 0 && !state.live.race_start_ms) {
+        state.live.race_start_ms = Date.now() - Math.round(maxRaceElapsedSec * 1000);
+        console.log(`[timer] race_start_ms derived from TimeElapsed=${data.TimeElapsed} → ${state.live.race_start_ms}`);
+        pushSSE('state', state.live);
+      }
       pushSSE('time', { race_time: state.live.race_time });
       break;
     }
