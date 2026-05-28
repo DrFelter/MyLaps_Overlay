@@ -924,15 +924,16 @@
         barClass = 'red';
         bannerText = '■  RED FLAG  —  RACE STOPPED  ■';
 
-      } else if (raceDisplayState === 4) {
-        // Checkered / finished — only on definitive finished state; FlagType=6 alone is unreliable
-        // (scoring engine leaves it at 6 from the prior race during pre-race staging)
+      } else if (raceDisplayState === 4 && raceStartMs) {
+        // Checkered / finished — require raceStartMs so we don't falsely trigger when the
+        // scoring engine ships a stale RaceDisplayState=4 from the prior race at the start
+        // of a new one (practice→race transition, or back-to-back races).
         stripClass = 'finish';
         barClass = 'finish';
         bannerText = '⛿  CHECKERED FLAG  —  RACE COMPLETE  ⛿';
-      } else if (flagType === 6 && raceDisplayState !== 3) {
-        // FlagType=6 without raceDisplayState=4: just show the strip, no banner
-        // Guard raceDisplayState===3: engine leaves FlagType=6 from prior race at start of new race
+      } else if (flagType === 6 && raceDisplayState !== 3 && raceStartMs) {
+        // FlagType=6 checker strip — same staleness guard: only show once this race
+        // has actually started.
         stripClass = 'finish';
 
       } else if (flagType === 5) {
