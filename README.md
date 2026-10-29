@@ -8,7 +8,7 @@ Connects to the LiveTime scoring engine and serves a live OBS overlay.
 |------|-------------|
 | `livetime_bridge.js` | Node.js bridge server |
 | `obs_overlay.html` | OBS browser source overlay |
-| `grrclogo.jpg` | Track logo (place in same folder as HTML) |
+| `616_Logo.png` | Track logo (place in same folder as HTML) |
 | `start.sh` | Manual start script |
 | `install-service.sh` | Install as auto-start service |
 

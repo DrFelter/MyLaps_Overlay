@@ -11,7 +11,7 @@ https://github.com/DrFelter/MyLaps_Overlay
 ## Key Files
 - `livetime_bridge.js` — Node.js bridge server (port 8000)
 - `obs_overlay.html` — OBS browser source (1920×1080, transparent bg)
-- `grrclogo.jpg` — Track logo (must be in same folder as HTML)
+- `616_Logo.png` — Track logo (must be in same folder as HTML)
 - `package.json` — Node dependencies: express, cors, ws
 - `install-service.sh` — Installs bridge as systemd service on Ubuntu
 - `start.sh` — Manual start script
