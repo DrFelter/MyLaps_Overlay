@@ -253,8 +253,9 @@
 
     /* Logo image */
     .logo-img {
-      height: calc(var(--top-h) + 65px);
-      /* fills header height with 5px padding top/bottom */
+      height: calc(var(--top-h) - 6px);
+      /* fits inside the header with 3px padding top/bottom (the 616 artwork
+         fills its canvas edge to edge, unlike the old padded GRRC logo) */
       width: auto;
       object-fit: contain;
       flex-shrink: 0;
