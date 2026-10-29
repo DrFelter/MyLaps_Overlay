@@ -45,16 +45,13 @@ sudo journalctl -u livetime-bridge -f    # watch live logs
 1. In OBS, add a **Browser Source**
 2. Set size to **1920 × 1080**
 3. Check **"Transparent background"**
-4. Set URL to:
+4. Set URL to (OBS on the same machine as the bridge):
    ```
-   http://<ubuntu-ip>:8080/obs_overlay.html?api=http://<ubuntu-ip>:8080
+   http://localhost:8080/obs_overlay.html
    ```
-   Example: `http://192.168.1.50:8080/obs_overlay.html?api=http://192.168.1.50:8080`
-
-**Find the Ubuntu IP:**
-```bash
-ip addr show | grep "inet " | grep -v 127
-```
+   The page pulls its data from whichever server served it, so no IP or
+   `?api=` is needed. From another PC use `http://<ubuntu-ip>:8080/obs_overlay.html`;
+   `?api=<url>` still overrides the data source if ever needed.
 
 ## Diagnostic Tools
 

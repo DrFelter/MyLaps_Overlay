@@ -18,8 +18,8 @@ https://github.com/DrFelter/MyLaps_Overlay
 
 ## Network
 - Scoring engine IP: `10.1.10.70:54235`
-- Bridge runs on Ubuntu box at track, port 8000
-- OBS URL: `http://<ubuntu-ip>:8000/obs_overlay.html?api=http://<ubuntu-ip>:8000`
+- Bridge runs on Ubuntu box at track, port 8080 (`PORT` in livetime-bridge.service)
+- OBS URL: `http://localhost:8080/obs_overlay.html` — the page defaults its API to `location.origin`; `?api=` overrides
 
 ## Encryption
 LiveTime uses AES-256-CBC with a hardcoded key found in `LiveTime.DeviceCenter.Service.Client.dll`:

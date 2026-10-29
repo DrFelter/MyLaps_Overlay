@@ -841,7 +841,11 @@
   <script>
     // ── Config ────────────────────────────────────────────────────────────────
     const p = new URLSearchParams(location.search);
-    const API = p.get('api') || 'http://127.0.0.1:8000';
+    // Default to the server that served this page (livetime_bridge serves both
+    // the page and /api), so no IP is ever hard-coded. ?api= still overrides;
+    // opened as a local file there's no origin, so fall back to the bridge port.
+    const API = p.get('api') ||
+      (location.protocol.startsWith('http') ? location.origin : 'http://127.0.0.1:8080');
     const POLL = +(p.get('poll') || 400);
 
     const SLOTS = 10;  // 5 × 2
