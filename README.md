@@ -65,4 +65,6 @@ sudo journalctl -u livetime-bridge -f    # watch live logs
 
 Edit `LT_HOST` in `start.sh` or the systemd service if the scoring engine IP changes.
 
+If the overlay goes blank after a LiveTime update, check the service log for `LiveTime login rejected`. The error names the API version LiveTime wants; set `LT_API_VERSION` in the service environment to match, or update the default in `livetime_bridge.js`.
+
 

@@ -15,6 +15,18 @@ const PORT    = Number(process.env.PORT   || 8080);
 const LT_HOST = process.env.LT_HOST || '10.1.10.70:54235';
 const DEBUG   = process.env.DEBUG === '1';
 
+// LiveTime refuses logins from any other API version, so this must track its updates
+const LT_API_VERSION = Number(process.env.LT_API_VERSION || 12);
+const LOGIN = {
+  APIVersion: LT_API_VERSION,
+  DeviceName: 'JOHN-SURFACEPRO',
+  ApplicationType: 3,
+  ClientOperatingSystem: 1,
+  Password: null,
+  IsLive: true,
+  LiveDriverLIDFilter: null,
+};
+
 // ─── AES-256-CBC codec ────────────────────────────────────────────────────
 const KEY = Buffer.from('3E12EE3C794642E68CFB6478D72B3938', 'utf8');
 
@@ -340,6 +352,14 @@ function requestRaceEntries(raceLID) {
 function handlePacket(type, data) {
   switch (type) {
 
+    case 'LoginResponse':
+      // A rejected login leaves the socket open with no data, so nothing else shows it
+      if (!data.IsLoginAccepted) {
+        state.connection.last_error = data.Error || 'Login rejected';
+        console.error(`LiveTime login rejected: ${data.Error || 'no reason given'}`);
+      }
+      break;
+
     case 'LiveSettingResponse':
       state.live.setting = data;
       break;
@@ -571,7 +591,7 @@ async function connectSignalR() {
           handshakeDone = true;
           log('Handshake OK');
           const REQ = [
-            [1, 'LoginRequest',              'BcHJgoIgAADQD+oAhbkc5hApuU6Ja960wi0pGZXy6+c9pzUgl9mLq5/hTHiwgoHiJBLq2AJWR5J6D462XepNvc50FB+s3ZR7T9GqmYYp/Q0dUCKfzH6wHrPT+PRBrNgsIOGtuncHFUG7HqriPR779Ss7d38t+y32k0ZAjRBDGDlqzGL/4BE2M+aagQOWb/9Wsb0WaXmjqSX6AqYOziSQ3SmJN6SiO9dNahPkSm2YVEThVTp6qDWT8sKRmNeZJbBZ7ue/jg3j4qOLsilnl1s//w=='],
+            [1, 'LoginRequest',              encodePacket(LOGIN)],
             [2, 'LiveStateRequest',           'C3SvNDCOyE80CCv0NHAsqfT3y0wODPVLsghNdExMMjf3zTMrKHAJcUoqcrQFAA=='],
             [3, 'LiveSettingRequest',          '89GOqiosDEkOLCg3LKg0CjfPK7QINvUyDdI2LgzIDwkMN9cPSosyyEyOyLYFAA=='],
             [4, 'LiveRaceStateRequest',        'Ky80KI8I83bLTvIsC4gyNnAyC0x2L8vLdEvKzjHPyPQudUn10S/TLsizTLYFAA=='],
