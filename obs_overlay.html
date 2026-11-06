@@ -1277,6 +1277,39 @@
       }, 2000);
     }
 
+    // Rebuild the class bests from the current practice sessions on every update, so the
+    // strip shows each driver as LiveTime has them now. Naming an "Unknown Driver" in
+    // LiveTime keeps the same session and the same best lap, so only copying a strictly
+    // faster lap would leave "UNKNOWN DRIVER" on the strip for the rest of practice.
+    function syncClassBests(sessions) {
+      const next = {};
+      sessions.forEach(s => {
+        if (!s.FastestLap) return;
+        const cls = s.RaceClassName || 'Unknown';
+        if (!next[cls] || s.FastestLap < next[cls].lapTime) {
+          next[cls] = { driverName: s.DriverName, lapTime: s.FastestLap, color: s.RaceClassColor || '' };
+        }
+      });
+
+      const sameTime = (a, b) => Math.abs(a - b) < 0.0005;
+      let changed = Object.keys(next).length !== Object.keys(classBests).length;
+      Object.entries(next).forEach(([cls, b]) => {
+        const old = classBests[cls];
+        if (!old || old.driverName !== b.driverName || !sameTime(old.lapTime, b.lapTime) || old.color !== b.color) changed = true;
+        // Keep the flash a hot lap event just started
+        b.flash = !!old?.flash && sameTime(old.lapTime, b.lapTime);
+        if (old?.lapNumber && sameTime(old.lapTime, b.lapTime)) b.lapNumber = old.lapNumber;
+      });
+      if (!changed) return;
+
+      Object.keys(classBests).forEach(k => delete classBests[k]);
+      Object.assign(classBests, next);
+      if (Object.keys(classBests).length === 0) { stopTicker(); return; }
+      tickerBuilt = false;
+      buildTickerDOM();
+      startTicker();
+    }
+
     // Called when switching away from practice
     function hideHotlapStrip() {
       stopTicker();
@@ -1319,6 +1352,7 @@
       // Toggle top bar layout mode + hot lap strip visibility
       document.querySelector('.top-bar').classList.toggle('practice', isPractice);
       if (!isPractice) hideHotlapStrip();
+      else syncClassBests(ps.LivePracticeSessions || []);
 
       // ── Title pill ─────────────────────────────────────────────
       if (isPractice) {
@@ -1516,27 +1550,7 @@
       es.addEventListener('state', e => {
         try {
           const data = JSON.parse(e.data);
-
-          // Seed ticker from existing practice session on connect/reconnect
-          const sessions = data?.practice_session?.LivePracticeSessions || [];
-          if (sessions.length > 0 && data?.event_state?.LiveState === 0) {
-            let changed = false;
-            sessions.forEach(s => {
-              const cls = s.RaceClassName || 'Unknown';
-              if (s.FastestLap && (!classBests[cls] || s.FastestLap < classBests[cls].lapTime)) {
-                classBests[cls] = {
-                  driverName: s.DriverName,
-                  lapTime: s.FastestLap,
-                  color: s.RaceClassColor || '',
-                  flash: false,
-                };
-                changed = true;
-              }
-            });
-            if (changed) { tickerBuilt = false; buildTickerDOM(); startTicker(); }
-          }
-
-          applyState(data);
+          applyState(data);  // also rebuilds the hot lap strip from the practice sessions
           connBadge.classList.remove('on');
         } catch (err) { /* ignore parse errors */ }
       });
