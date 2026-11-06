@@ -57,6 +57,12 @@ function encodePacket(obj) {
   return compressed.toString('base64');
 }
 
+// LiveTime sends the transponder as display text (e.g. "2200810"); null when it isn't a plain number
+function transponderOf(e) {
+  const t = String(e?.TransponderDisplay ?? '').trim();
+  return /^\d+$/.test(t) ? Number(t) : null;
+}
+
 // Parse "M:SS.mmm", "MM:SS", or bare seconds to a float
 function parseHMS(s) {
   if (!s) return 0;
@@ -305,6 +311,7 @@ function mergePracticeSessions(data) {
     practiceSessionCache[s.LID] = {
       LID:        s.LID,
       Number:     s.Number,
+      Transponder: transponderOf(s),   // used by MyLaps to fill in names and classes
       DriverName: s.DriverName,
       RaceClassName: s.RaceClassName,
       RaceClassColor: s.RaceClassColor,
@@ -327,9 +334,15 @@ function mergePracticeSessions(data) {
 
 
 let liveRaceEntryCache = {};  // keyed by RaceEntryLID
+let loggedRaceEntryFields = false;
 
 function mergeLiveRaceEntries(data) {
   const entries = data.LiveRaceEntries || [];
+  // Once per run, record which fields race entries carry (does it include the transponder?)
+  if (!loggedRaceEntryFields && entries.length) {
+    loggedRaceEntryFields = true;
+    console.log(`LiveRaceEntry fields: ${Object.keys(entries[0]).join(', ')}`);
+  }
   if (!data.IsDelta) {
     liveRaceEntryCache = {};
     entries.forEach(e => { liveRaceEntryCache[e.RaceEntryLID] = e; });
@@ -498,6 +511,9 @@ function handlePacket(type, data) {
 
     case 'RaceEntryByRaceResponse':
       state.live.race_entry = data;
+      if (data.RaceEntries?.length) {
+        console.log(`RaceEntryByRace fields: ${Object.keys(data.RaceEntries[0]).join(', ')}`);
+      }
       if (data.Race?.LID) currentRaceLID = data.Race.LID;
       console.log(`RaceEntries received: ${(data.RaceEntries || []).length} drivers`);
       pushSSE('state', state.live);
@@ -512,6 +528,7 @@ function handlePacket(type, data) {
           RaceEntryLID:            e.RaceEntryLID,
           Position:                e.Position,
           Number:                  e.Number,
+          Transponder:             transponderOf(e),
           DriverName:              e.DriverName,
           Laps:                    e.Laps,
           LapTime:                 e.LapTime   ? parseFloat(e.LapTime)   : null,

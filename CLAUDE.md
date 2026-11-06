@@ -76,6 +76,7 @@ Different from RaceEntryByRaceResponse:
 - `LivePracticeSessionLaps[0]` = most recent lap `{LapTimeSeconds, LapNumber, IsValidLap}`
 - `RaceClassName`, `RaceClassColor` = class info
 - `IsDelta` = true means only changed drivers sent (bridge merges into cache)
+- `TransponderDisplay` = the transponder number as text (e.g. "2200810"); bridge exposes it as `Transponder` (number, or null)
 - Bridge normalizes: `LastLap = LivePracticeSessionLaps[0].LapTimeSeconds`
 
 ## FlagType Enum
@@ -138,9 +139,12 @@ to auto-assign driver names and classes without manual claiming.
 **This project is read-only from MyLaps' perspective** — MyLaps never writes to or modifies
 anything in MylapsOverlay.
 
-**Key constraint:** LiveTime packets never contain transponder numbers. The link between a
-transponder (MyLaps) and a driver (LiveTime) is established via lap time fingerprinting +
-fuzzy name matching. Once confirmed, it's stored in MyLaps' `config.sqlite`.
+**Transponder numbers:** practice sessions carry `TransponderDisplay` (seen 2026-11-06), which
+the bridge exposes as `Transponder` on practice sessions and live race entries. Whether race
+packets carry it is not yet confirmed: the bridge logs the field names of the first
+`LiveRaceEntry` and `RaceEntryByRace` it gets (`journalctl -u livetime-bridge | grep fields`).
+MyLaps records `Transponder` + `DriverName` + `RaceClassName` on each lap and fills in Hotlaps
+names and classes from it.
 
 **LiveState values matter:** MyLaps' overlay client uses `LiveState` to gate all activity.
 Do not change the `LiveState` semantics (`0=practice, 1=race`) without updating
