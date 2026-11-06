@@ -488,6 +488,7 @@ function handlePacket(type, data) {
 
           if (isPersonalBest && beatsField && !isSuspicious) {
             pushSSE('hotlap', {
+              lid:        s.LID,   // lets the overlay follow a rename of this driver
               driverName: s.DriverName,
               number:     s.Number,
               lapTime:    thisTime,

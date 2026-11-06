@@ -1259,6 +1259,7 @@
 
       // Update the class best
       classBests[cls] = {
+        lid: d.lid ?? null,   // LiveTime session, so a later rename can follow it
         driverName: d.driverName,
         lapTime: d.lapTime,
         lapNumber: d.lapNumber,
@@ -1277,33 +1278,43 @@
       }, 2000);
     }
 
-    // Rebuild the class bests from the current practice sessions on every update, so the
-    // strip shows each driver as LiveTime has them now. Naming an "Unknown Driver" in
-    // LiveTime keeps the same session and the same best lap, so only copying a strictly
-    // faster lap would leave "UNKNOWN DRIVER" on the strip for the rest of practice.
+    // Keep each class's best for the whole practice, even after its driver times out of
+    // LiveTime's list, while following drivers who are still listed: naming an
+    // "Unknown Driver" keeps the same session (LID) and best lap, so the name updates in
+    // place, and a driver moved to another class takes their best with them.
     function syncClassBests(sessions) {
-      const next = {};
-      sessions.forEach(s => {
-        if (!s.FastestLap) return;
-        const cls = s.RaceClassName || 'Unknown';
-        if (!next[cls] || s.FastestLap < next[cls].lapTime) {
-          next[cls] = { driverName: s.DriverName, lapTime: s.FastestLap, color: s.RaceClassColor || '' };
+      const byLid = new Map(sessions.filter(s => s.LID != null).map(s => [s.LID, s]));
+      const before = JSON.stringify(classBests);
+
+      // Entries from a hot lap event before the bridge sent LIDs: tie them to a session
+      Object.values(classBests).forEach(b => {
+        if (b.lid == null) {
+          const s = sessions.find(x => x.DriverName === b.driverName && x.FastestLap && Math.abs(x.FastestLap - b.lapTime) < 0.0005);
+          if (s) b.lid = s.LID;
         }
       });
 
-      const sameTime = (a, b) => Math.abs(a - b) < 0.0005;
-      let changed = Object.keys(next).length !== Object.keys(classBests).length;
-      Object.entries(next).forEach(([cls, b]) => {
-        const old = classBests[cls];
-        if (!old || old.driverName !== b.driverName || !sameTime(old.lapTime, b.lapTime) || old.color !== b.color) changed = true;
-        // Keep the flash a hot lap event just started
-        b.flash = !!old?.flash && sameTime(old.lapTime, b.lapTime);
-        if (old?.lapNumber && sameTime(old.lapTime, b.lapTime)) b.lapNumber = old.lapNumber;
+      // Follow listed drivers: renames update in place; a class change moves their best
+      Object.entries(classBests).forEach(([cls, b]) => {
+        const s = b.lid != null ? byLid.get(b.lid) : null;
+        if (!s) return;   // timed out or not tied to a session: keep it as it was
+        if ((s.RaceClassName || 'Unknown') !== cls) { delete classBests[cls]; return; }
+        b.driverName = s.DriverName;
+        if (s.RaceClassColor) b.color = s.RaceClassColor;
       });
-      if (!changed) return;
 
-      Object.keys(classBests).forEach(k => delete classBests[k]);
-      Object.assign(classBests, next);
+      // Take any faster lap from the drivers listed now
+      sessions.forEach(s => {
+        if (!s.FastestLap) return;
+        const cls = s.RaceClassName || 'Unknown';
+        const b = classBests[cls];
+        if (!b || s.FastestLap < b.lapTime - 0.0005) {
+          classBests[cls] = { lid: s.LID ?? null, driverName: s.DriverName, lapTime: s.FastestLap,
+                              color: s.RaceClassColor || '', flash: false };
+        }
+      });
+
+      if (JSON.stringify(classBests) === before) return;
       if (Object.keys(classBests).length === 0) { stopTicker(); return; }
       tickerBuilt = false;
       buildTickerDOM();
